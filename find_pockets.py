@@ -2,6 +2,8 @@ import sys
 import math
 import numpy as np
 from scipy.spatial import ConvexHull
+import matplotlib.pyplot as plt
+import matplotlib.tri as tri
 
 def PDB_iterator(pdb_file_path=None):
     if pdb_file_path is None:
@@ -89,34 +91,108 @@ create_voxels("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
 # Use as points the voxel centers that contain protein atoms and apply an algorithm to find the convex hull to these points
 # The convex hull is the smallest convex polyhedron that encloses the protein
 
-# define the points
-# points = np.array(voxels)
 def create_convex_hull(file_path):
     atoms_list = []
     for _ , _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
         atoms_list.append((x_coordinate,y_coordinate,z_coordinate))
     atoms_np_array = np.array(atoms_list)
-    hull = ConvexHull(atoms_np_array)
+    hull = ConvexHull(atoms_np_array) # The ConvexHull method receives a numpy array as input
     #return hull
 
-    import matplotlib.pyplot as plt
-    import matplotlib.tri as tri
-
-
+    # Plot the convex hull
     ax = plt.figure().add_subplot(projection='3d')
 
     ax.plot_trisurf(
         np.array([atom[0] for atom in atoms_list]),
         np.array([atom[1] for atom in atoms_list]),
         np.array([atom[2] for atom in atoms_list]),
-        triangles=np.array(hull.simplices),
-        linewidth=0.2, antialiased=True)
+        triangles = np.array(hull.simplices),
+        linewidth = 0.2, antialiased=True)
 
     plt.show()
-
+    # End of plot for convex hull
     return hull
 
-print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
+#print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
+
+def plot_convex_hull_with_vertices(file_path):
+    atoms_list = get_atom_coordinates(file_path)
+    
+    atoms_np_array = np.array(atoms_list)
+    hull = ConvexHull(atoms_np_array)  # Compute the convex hull
+
+    # Extract hull vertices
+    hull_vertices_coordinates = np.array([hull.points[vertex] for vertex in hull.vertices])
+
+    # Plot the convex hull
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.plot_trisurf(
+        np.array([atom[0] for atom in atoms_list]),
+        np.array([atom[1] for atom in atoms_list]),
+        np.array([atom[2] for atom in atoms_list]),
+        triangles=hull.simplices,
+        linewidth=0.2, antialiased=True, alpha=0.5
+    )
+
+    # Scatter plot the convex hull vertices
+    ax.scatter(
+        hull_vertices_coordinates[:, 0], 
+        hull_vertices_coordinates[:, 1], 
+        hull_vertices_coordinates[:, 2], 
+        color='red', marker='o', s=50, label="Hull Vertices"
+    )
+
+    # Labels and legend
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.legend()
+
+def get_atom_coordinates(file_path):
+    atoms_list = []
+    ids_list = []
+    
+    # Iterate through PDB file and extract atom coordinates
+    for identifier, _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
+        atoms_list.append((x_coordinate, y_coordinate, z_coordinate))
+        ids_list.append(identifier)
+    return atoms_list, ids_list
+    
+    #plt.show()
+
+#print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
+
+file_path = "/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"
+hull = create_convex_hull(file_path)
+triangle_ids = np.array(hull.simplices)
+atom_list, ids_list = get_atom_coordinates(file_path)
+for triangle in triangle_ids:
+    print((ids_list[triangle[0]], ids_list[triangle[1]], ids_list[triangle[2]]), atom_list[triangle[0]], atom_list[triangle[1]], atom_list[triangle[2]])
+
+#the hull vertices can be found using vertices attribute(return indices for input points):
+hull_vertices_coordinates = [hull.points[vertex] for vertex in hull.vertices]
+for point in hull_vertices_coordinates:
+    print(point[0])
+
+                      
+# For each triangle, define a box around it→ axis aligned bounding box (aabb)
+#get the vertices of the convex hull from the result returned from the scipy.spatial.ConvexHull function
+
+def get_bounding_box_for_triangle(x_0, y_0, z_0, x_1, y_1, z_1, x_2, y_2, z_2):
+    xmin = min(x_0, x_1, x_2)
+    xmax = max(x_0, x_1, x_2)
+    ymin = min(y_0, y_1, y_2)
+    ymax = max(y_0, y_1, y_2)
+    zmin = min(z_0, z_1, z_2)
+    zmax = max(z_0, z_1, z_2)
+
+    bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
+    return bounding_box_dict      
+
+    
+
 
 
 # print(points[hull.vertices])
