@@ -62,8 +62,8 @@ def atoms_coordinates_dict(file_path):
 #     return bounding_box_dict      
 
 # The next step is to divide the 3D space (the bounding box in this case) into small cubes of 1 Angstrom per 
-def create_bounding_box_and_voxels(file_path, atom_coordinates):
-    voxel_size = 1.0
+def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
+
     # box_coordinates = define_bounding_box(file_path, atom_coordinates)
 
     # xmin = box_coordinates["X"][0]
@@ -77,7 +77,7 @@ def create_bounding_box_and_voxels(file_path, atom_coordinates):
     y_coords = []
     z_coords = []
 
-    for atom_id, coordinates in atom_coordinates.items():
+    for _, coordinates in atom_coordinates.items():
             x_coords.append(coordinates[0])
             y_coords.append(coordinates[1])
             z_coords.append(coordinates[2])
@@ -89,6 +89,8 @@ def create_bounding_box_and_voxels(file_path, atom_coordinates):
     zmin = min(z_coords)
     zmax = max(z_coords)
 
+    bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
+
     # Use the ceiling function to ensure we cover the bounding box
     range_x = math.ceil((xmax - xmin )/voxel_size)
     range_y = math.ceil((ymax - ymin)/voxel_size)
@@ -96,138 +98,123 @@ def create_bounding_box_and_voxels(file_path, atom_coordinates):
     print(f"Voxel grid dimensions are: rangex={range_x}, rangey={range_y}, rangez={range_z}")
 
     # Generate voxel coordinates and store them in a dictionary
-    voxel_dict = {}
+    voxel_grid = {}
     for i in range(range_x): # recall: range(n) = 0, 1, 2, ..., n-1
         for j in range(range_y):
             for k in range(range_z):
-                # Calculate the center of each voxel
-                center_x = xmin + i*voxel_size + (voxel_size/2)
-                center_y = ymin + j*voxel_size + (voxel_size/2)
-                center_z = zmin + k*voxel_size + (voxel_size/2)
                 #Store in a dictionary with the indices i,j,k as key
-                voxel_dict[(i,j,k)] = (center_x, center_y, center_z)
+                voxel_grid[(i,j,k)] = "empty"
     
-    return voxel_dict
+    return bounding_box_dict, voxel_grid
 
-""" 
-# Use as points the voxel centers that contain protein atoms and apply an algorithm to find the convex hull to these points
 # The convex hull is the smallest convex polyhedron that encloses the protein
-
-def create_convex_hull(file_path):
+def create_convex_hull(atom_coordinates):
     atoms_list = []
-    for _ , _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
-        atoms_list.append((x_coordinate,y_coordinate,z_coordinate))
+    for _, coordinates in atom_coordinates.items():
+            atoms_list.append((coordinates[0], coordinates[1], coordinates[2]))
     atoms_np_array = np.array(atoms_list)
     hull = ConvexHull(atoms_np_array) # The ConvexHull method receives a numpy array as input
-    return hull
+    return hull, atoms_list
 
-#print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
-
-def get_atom_coordinates(file_path):
-    atoms_list = []
-    ids_list = []
-    
-    # Iterate through PDB file and extract atom coordinates
-    for identifier, _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
-        atoms_list.append((x_coordinate, y_coordinate, z_coordinate))
-        ids_list.append(identifier)
-    return atoms_list, ids_list
-    
-file_path = "/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"
-hull = create_convex_hull(file_path)
-triangle_ids = np.array(hull.simplices)
-atom_list, ids_list = get_atom_coordinates(file_path)
-for triangle in triangle_ids:
-    print((ids_list[triangle[0]], ids_list[triangle[1]], ids_list[triangle[2]]), atom_list[triangle[0]], atom_list[triangle[1]], atom_list[triangle[2]])
-
-# The hull vertices can be found using vertices attribute(return indices for input points):
-hull_vertices_coordinates = [hull.points[vertex] for vertex in hull.vertices]
-for point in hull_vertices_coordinates:
-    print(point[0])
-
-                      
-# For each triangle, define a box around it→ axis aligned bounding box (aabb)
-# get the vertices of the convex hull from the result returned from the scipy.spatial.ConvexHull function
-
-def get_bounding_box_for_triangle(x_0, y_0, z_0, x_1, y_1, z_1, x_2, y_2, z_2):
-    xmin = min(x_0, x_1, x_2)
-    xmax = max(x_0, x_1, x_2)
-    ymin = min(y_0, y_1, y_2)
-    ymax = max(y_0, y_1, y_2)
-    zmin = min(z_0, z_1, z_2)
-    zmax = max(z_0, z_1, z_2)
-
-    bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
-    return bounding_box_dict      
-
-# Functions already implemented in your code:
-# - PDB_iterator
-# - define_bounding_box
-# - create_voxels
-# - create_convex_hull
-# - get_atom_coordinates
-
-def identify_filled_empty_voxels(file_path, voxel_size=1.0):
-    """ """
+def identify_filled_empty_voxels(atom_coordinates, voxel_size = 1.0):
+    """ 
     Step 4: Separate empty voxels from voxels filled by protein atoms in the convex hull
-    
-    Returns:
-    - voxel_grid: Dictionary with voxel indices as keys and 'filled' or 'empty' as values
-    - atom_voxel_map: Dictionary mapping each atom index to its voxel
-    - voxel_atom_map: Dictionary mapping each filled voxel to the atoms it contains
-    """ """
-    box_coordinates = define_bounding_box(file_path)
-    xmin, xmax = box_coordinates["X"]
-    ymin, ymax = box_coordinates["Y"]
-    zmin, zmax = box_coordinates["Z"]
-    
-    # Calculate grid dimensions
-    range_x = math.ceil((xmax - xmin)/voxel_size)
-    range_y = math.ceil((ymax - ymin)/voxel_size)
-    range_z = math.ceil((zmax - zmin)/voxel_size)
-    
-    # Initialize voxel grid
-    voxel_grid = {}
-    for i in range(range_x):
-        for j in range(range_y):
-            for k in range(range_z):
-                voxel_grid[(i, j, k)] = 'empty'
-    
+    """ 
+    box, voxel_grid = create_bounding_box_and_voxels(atom_coordinates)
+
     # Map atoms to voxels
     atom_voxel_map = {}
     voxel_atom_map = defaultdict(list)
     
-    for idx, (identifier, _, _, _, _, x, y, z) in enumerate(PDB_iterator(file_path)):
+    xmin = box["X"][0]
+    ymin = box["Y"][0]
+    zmin = box["Z"][0]
+    
+    for identifier, coordinates in atom_coordinates.items():
         # Determine which voxel this atom is in
-        i = int((x - xmin) / voxel_size)
-        j = int((y - ymin) / voxel_size)
-        k = int((z - zmin) / voxel_size)
+        i = math.ceil((coordinates[0] - xmin) / voxel_size)
+        j = math.ceil((coordinates[1] - ymin) / voxel_size)
+        k = math.ceil((coordinates[2] - zmin) / voxel_size)
         
         voxel_idx = (i, j, k)
         voxel_grid[voxel_idx] = 'filled'
         atom_voxel_map[identifier] = voxel_idx
         voxel_atom_map[voxel_idx].append(identifier)
     
-    # Get convex hull to determine which empty voxels are inside
-    atoms_list = []
-    for _, _, _, _, _, x, y, z in PDB_iterator(file_path):
-        atoms_list.append((x, y, z))
-    
-    hull = ConvexHull(np.array(atoms_list))
-    
-    return voxel_grid, atom_voxel_map, voxel_atom_map, hull
+    # for id, atoms in voxel_atom_map.items():
+    #     if len(atoms) > 1:
+    #         print(voxel_atom_map[id])
 
-def define_pockets_from_triangles(hull, atoms_list, file_path, voxel_size=1.0):
+    #print(voxel_atom_map)
+    
+    return voxel_grid, atom_voxel_map, voxel_atom_map
+"""
+def identify_nearest_empty_voxels(file_path, voxel_size=1.0, max_distance=5.0):
     """ """
+    Identify empty voxels that are nearest to protein atoms within a maximum distance
+    
+    Parameters:
+    - file_path: Path to the PDB file
+    - voxel_size: Size of each voxel
+    - max_distance: Maximum distance to consider an empty voxel as "near" to a protein atom
+    
+    Returns:
+    - empty_voxels_near_protein: Dictionary with empty voxel indices as keys and distances to nearest protein atom as values
+    """ """
+    # Get voxel grid, atom-voxel mappings, and hull from existing function
+    voxel_grid, atom_voxel_map, voxel_atom_map, hull = identify_filled_empty_voxels(file_path, voxel_size)
+    
+    # Initialize dictionary for empty voxels near protein
+    empty_voxels_near_protein = {}
+    
+    # Get coordinates of all protein atoms
+    atom_coords = {}
+    for identifier, _, _, _, _, x, y, z in PDB_iterator(file_path):
+        atom_coords[identifier] = (x, y, z)
+    
+    # Get box coordinates for reference
+    box_coordinates = define_bounding_box(file_path)
+    xmin, _ = box_coordinates["X"]
+    ymin, _ = box_coordinates["Y"]
+    zmin, _ = box_coordinates["Z"]
+    
+    # Identify empty voxels
+    empty_voxels = [voxel_idx for voxel_idx, status in voxel_grid.items() if status == 'empty']
+    
+    # For each empty voxel, find distance to nearest protein atom
+    for voxel_idx in empty_voxels:
+        i, j, k = voxel_idx
+        
+        # Calculate center of voxel
+        voxel_x = xmin + i*voxel_size + (voxel_size/2)
+        voxel_y = ymin + j*voxel_size + (voxel_size/2)
+        voxel_z = zmin + k*voxel_size + (voxel_size/2)
+        
+        # Find minimum distance to any protein atom
+        min_distance = float('inf')
+        
+        for atom_id, (atom_x, atom_y, atom_z) in atom_coords.items():
+            distance = math.sqrt((voxel_x - atom_x)*2 + (voxel_y - atom_y)2 + (voxel_z - atom_z)*2)
+            min_distance = min(min_distance, distance)
+        
+        # If distance is within threshold, add to dictionary
+        if min_distance <= max_distance:
+            empty_voxels_near_protein[voxel_idx] = min_distance
+    
+    return empty_voxels_near_protein
+
+"""
+def define_pockets_from_triangles(hull, atoms_list, box, voxel_grid, voxel_atom_map, voxel_size=1.0):
+    """
     Step 5: Define pockets by the volume generated by the vertices of each triangle on the convex hull
     
     Returns:
     - pockets: Dictionary with pocket IDs as keys and dictionaries with pocket information as values
-    """ """
-    box_coordinates = define_bounding_box(file_path)
-    xmin, xmax = box_coordinates["X"]
-    ymin, ymax = box_coordinates["Y"]
-    zmin, zmax = box_coordinates["Z"]
+    """
+
+    xmin, xmax = box["X"]
+    ymin, ymax = box["Y"]
+    zmin, zmax = box["Z"]
     
     pockets = {}
     triangle_ids = np.array(hull.simplices)
@@ -246,7 +233,7 @@ def define_pockets_from_triangles(hull, atoms_list, file_path, voxel_size=1.0):
         t_zmin = min(p1[2], p2[2], p3[2])
         t_zmax = max(p1[2], p2[2], p3[2])
         
-        # Calculate voxel coordinates for the pocket
+        # Convert bounding box coordinates into voxel grid indices
         i_min = max(0, int((t_xmin - xmin) / voxel_size))
         i_max = min(int((t_xmax - xmin) / voxel_size) + 1, math.ceil((xmax - xmin)/voxel_size))
         j_min = max(0, int((t_ymin - ymin) / voxel_size))
@@ -257,8 +244,6 @@ def define_pockets_from_triangles(hull, atoms_list, file_path, voxel_size=1.0):
         # Find atoms and empty voxels within this pocket
         pocket_atoms = []
         pocket_empty_voxels = []
-        
-        voxel_grid, _, voxel_atom_map, _ = identify_filled_empty_voxels(file_path)
         
         for i in range(i_min, i_max):
             for j in range(j_min, j_max):
@@ -290,9 +275,9 @@ def define_pockets_from_triangles(hull, atoms_list, file_path, voxel_size=1.0):
                 'z_range': (t_zmin, t_zmax)
             }
         }
-    
+    print(pockets)
     return pockets
-
+"""
 def compute_pocket_overlap(pockets, overlap_threshold=0.8):
     """ """
     Step 6: Compute overlap between pockets and merge those with high overlap
@@ -553,23 +538,18 @@ def run_pocket_detection(file_path, overlap_threshold=0.8):
    
     atoms_ids_and_coordinates = atoms_coordinates_dict(file_path)
 
-    print(create_bounding_box_and_voxels("1a6u.pdb", atoms_ids_and_coordinates))
+    # Create voxels
+    box, voxel_grid = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
 
-
-"""     # Steps 1-3 (already implemented in your code)
-    # Get atom coordinates
-    atoms_list, ids_list = get_atom_coordinates(file_path)
-    
     # Create convex hull
-    hull = create_convex_hull(file_path)
-    
-    # Steps 4-9 (implemented in this code)
+    hull, atoms_list = create_convex_hull(atoms_ids_and_coordinates)
+
     # Identify filled and empty voxels
-    voxel_grid, atom_voxel_map, voxel_atom_map, hull = identify_filled_empty_voxels(file_path)
-    
+    voxel_grid, atom_voxel_map, voxel_atom_map = identify_filled_empty_voxels(atoms_ids_and_coordinates)
+
     # Define pockets from triangles
-    pockets = define_pockets_from_triangles(hull, atoms_list, file_path)
-    
+    pockets = define_pockets_from_triangles(hull, atoms_list, box, voxel_grid, voxel_atom_map)
+"""    
     # Compute pocket overlap and merge pockets
     merged_pockets = compute_pocket_overlap(pockets, overlap_threshold)
     
