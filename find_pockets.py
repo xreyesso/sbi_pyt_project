@@ -30,18 +30,57 @@ def PDB_iterator(pdb_file_path=None):
 
     fi.close()
 
-def define_bounding_box(file_path):
-    """
-    Method to determine the coordinates of the box that will enclose the protein
-    """
+def atoms_coordinates_dict(file_path):
+    atom_id_coords_dict = {}
+    for atom_id, _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
+        atom_id_coords_dict[atom_id] = (x_coordinate, y_coordinate, z_coordinate)
+    return atom_id_coords_dict
+
+    
+# def define_bounding_box(file_path, atom_coordinates):
+
+#     """
+#     Method to determine the coordinates of the box that will enclose the protein
+#     """
+#     x_coords = []
+#     y_coords = []
+#     z_coords = []
+
+#     for atom_id, coordinates in atom_coordinates.items():
+#             x_coords.append(coordinates[0])
+#             y_coords.append(coordinates[1])
+#             z_coords.append(coordinates[2])
+    
+#     xmin = min(x_coords)
+#     xmax = max(x_coords)
+#     ymin = min(y_coords)
+#     ymax = max(y_coords)
+#     zmin = min(z_coords)
+#     zmax = max(z_coords)
+
+#     bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
+#     return bounding_box_dict      
+
+# The next step is to divide the 3D space (the bounding box in this case) into small cubes of 1 Angstrom per 
+def create_bounding_box_and_voxels(file_path, atom_coordinates):
+    voxel_size = 1.0
+    # box_coordinates = define_bounding_box(file_path, atom_coordinates)
+
+    # xmin = box_coordinates["X"][0]
+    # xmax = box_coordinates["X"][1]
+    # ymin = box_coordinates["Y"][0]
+    # ymax = box_coordinates["Y"][1]
+    # zmin = box_coordinates["Z"][0]
+    # zmax = box_coordinates["Z"][1]
+
     x_coords = []
     y_coords = []
     z_coords = []
 
-    for identifier, atom_name, residue_name, chain_ID, residue_ID, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
-        x_coords.append(x_coordinate)
-        y_coords.append(y_coordinate)
-        z_coords.append(z_coordinate)
+    for atom_id, coordinates in atom_coordinates.items():
+            x_coords.append(coordinates[0])
+            y_coords.append(coordinates[1])
+            z_coords.append(coordinates[2])
     
     xmin = min(x_coords)
     xmax = max(x_coords)
@@ -49,25 +88,6 @@ def define_bounding_box(file_path):
     ymax = max(y_coords)
     zmin = min(z_coords)
     zmax = max(z_coords)
-
-    bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
-    return bounding_box_dict      
-
-print(define_bounding_box("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
-
-# The net step is to divide the 3D space (the bounding box in this case) into small cubes of 1 Angstrom per 
-def create_voxels(file_path):
-    voxel_size = 1.0
-    box_coordinates = define_bounding_box(file_path)
-    xmin = box_coordinates["X"][0]
-    print(f"xmin: {xmin}")
-    xmax = box_coordinates["X"][1]
-    print(f"xmax: {xmax}")
-    ymin = box_coordinates["Y"][0]
-    ymax = box_coordinates["Y"][1]
-    zmin = box_coordinates["Z"][0]
-    zmax = box_coordinates["Z"][1]
-    print(f"zmax: {zmax}")
 
     # Use the ceiling function to ensure we cover the bounding box
     range_x = math.ceil((xmax - xmin )/voxel_size)
@@ -86,9 +106,10 @@ def create_voxels(file_path):
                 center_z = zmin + k*voxel_size + (voxel_size/2)
                 #Store in a dictionary with the indices i,j,k as key
                 voxel_dict[(i,j,k)] = (center_x, center_y, center_z)
+    
+    return voxel_dict
 
-create_voxels("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
-
+""" 
 # Use as points the voxel centers that contain protein atoms and apply an algorithm to find the convex hull to these points
 # The convex hull is the smallest convex polyhedron that encloses the protein
 
@@ -100,70 +121,7 @@ def create_convex_hull(file_path):
     hull = ConvexHull(atoms_np_array) # The ConvexHull method receives a numpy array as input
     return hull
 
-def plot_convex_hull(file_path):
-    atoms_list = []
-    for _ , _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
-        atoms_list.append((x_coordinate,y_coordinate,z_coordinate))
-    atoms_np_array = np.array(atoms_list)
-    hull = ConvexHull(atoms_np_array) # The ConvexHull method receives a numpy array as input
-    #return hull
-
-    # Plot the convex hull
-    ax = plt.figure().add_subplot(projection='3d')
-
-    ax.plot_trisurf(
-        np.array([atom[0] for atom in atoms_list]),
-        np.array([atom[1] for atom in atoms_list]),
-        np.array([atom[2] for atom in atoms_list]),
-        triangles = np.array(hull.simplices),
-        linewidth = 0.2, antialiased=True)
-
-    plt.show()
-
-
 #print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
-
-def plot_convex_hull_with_vertices(file_path):
-    #atoms_list = get_atom_coordinates(file_path)
-
-    atoms_list = []
-    for _ , _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
-        atoms_list.append((x_coordinate,y_coordinate,z_coordinate))
-    
-    atoms_np_array = np.array(atoms_list)
-    hull = ConvexHull(atoms_np_array)  # Compute the convex hull
-
-    # Extract hull vertices
-    hull_vertices_coordinates = np.array([hull.points[vertex] for vertex in hull.vertices])
-
-    # Plot the convex hull
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-
-    ax.plot_trisurf(
-        np.array([atom[0] for atom in atoms_list]),
-        np.array([atom[1] for atom in atoms_list]),
-        np.array([atom[2] for atom in atoms_list]),
-        triangles=hull.simplices,
-        linewidth=0.2, antialiased=True, alpha=0.5
-    )
-
-    # Scatter plot the convex hull vertices
-    ax.scatter(
-        hull_vertices_coordinates[:, 0], 
-        hull_vertices_coordinates[:, 1], 
-        hull_vertices_coordinates[:, 2], 
-        color='red', marker='o', s=50, label="Hull Vertices"
-    )
-
-    # Labels and legend
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.legend()
-
-    plt.show()
-
 
 def get_atom_coordinates(file_path):
     atoms_list = []
@@ -175,12 +133,6 @@ def get_atom_coordinates(file_path):
         ids_list.append(identifier)
     return atoms_list, ids_list
     
-
-## FUNCTION calls for testing/debugging
-#print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
-plot_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
-#plot_convex_hull_with_vertices("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
-
 file_path = "/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"
 hull = create_convex_hull(file_path)
 triangle_ids = np.array(hull.simplices)
@@ -208,9 +160,6 @@ def get_bounding_box_for_triangle(x_0, y_0, z_0, x_1, y_1, z_1, x_2, y_2, z_2):
     bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
     return bounding_box_dict      
 
-
-
-
 # Functions already implemented in your code:
 # - PDB_iterator
 # - define_bounding_box
@@ -219,14 +168,14 @@ def get_bounding_box_for_triangle(x_0, y_0, z_0, x_1, y_1, z_1, x_2, y_2, z_2):
 # - get_atom_coordinates
 
 def identify_filled_empty_voxels(file_path, voxel_size=1.0):
-    """
+    """ """
     Step 4: Separate empty voxels from voxels filled by protein atoms in the convex hull
     
     Returns:
     - voxel_grid: Dictionary with voxel indices as keys and 'filled' or 'empty' as values
     - atom_voxel_map: Dictionary mapping each atom index to its voxel
     - voxel_atom_map: Dictionary mapping each filled voxel to the atoms it contains
-    """
+    """ """
     box_coordinates = define_bounding_box(file_path)
     xmin, xmax = box_coordinates["X"]
     ymin, ymax = box_coordinates["Y"]
@@ -269,12 +218,12 @@ def identify_filled_empty_voxels(file_path, voxel_size=1.0):
     return voxel_grid, atom_voxel_map, voxel_atom_map, hull
 
 def define_pockets_from_triangles(hull, atoms_list, file_path, voxel_size=1.0):
-    """
+    """ """
     Step 5: Define pockets by the volume generated by the vertices of each triangle on the convex hull
     
     Returns:
     - pockets: Dictionary with pocket IDs as keys and dictionaries with pocket information as values
-    """
+    """ """
     box_coordinates = define_bounding_box(file_path)
     xmin, xmax = box_coordinates["X"]
     ymin, ymax = box_coordinates["Y"]
@@ -345,12 +294,12 @@ def define_pockets_from_triangles(hull, atoms_list, file_path, voxel_size=1.0):
     return pockets
 
 def compute_pocket_overlap(pockets, overlap_threshold=0.8):
-    """
+    """ """
     Step 6: Compute overlap between pockets and merge those with high overlap
     
     Returns:
     - merged_pockets: Dictionary of merged pockets
-    """
+    """ """
     overlap_matrix = {}
     for p1_id in pockets:
         overlap_matrix[p1_id] = {}
@@ -401,12 +350,12 @@ def compute_pocket_overlap(pockets, overlap_threshold=0.8):
     return merged_pockets
 
 def calculate_pocket_properties(merged_pockets, file_path):
-    """
+    """ """
     Step 7: Calculate physical properties of pockets (depth, surface area, volume)
     
     Returns:
     - pockets_with_properties: Dictionary of pockets with calculated properties
-    """
+    """ """
     pockets_with_properties = {}
     
     for pocket_id, pocket in merged_pockets.items():
@@ -461,12 +410,12 @@ def calculate_pocket_properties(merged_pockets, file_path):
     return pockets_with_properties
 
 def identify_pocket_residues(pockets_with_properties, file_path):
-    """
+    """ """
     Step 8: Identify residues corresponding to pocket atoms
     
     Returns:
     - pockets_with_residues: Dictionary of pockets with residue information
-    """
+    """ """
     pockets_with_residues = {}
     
     # Create a mapping from atom ID to residue
@@ -488,12 +437,12 @@ def identify_pocket_residues(pockets_with_properties, file_path):
     return pockets_with_residues
 
 def check_biochemical_conditions(pockets_with_residues, file_path):
-    """
+    """ """
     Step 9: Check biochemical conditions for pockets
     
     Returns:
     - biochemically_filtered_pockets: Dictionary of pockets that meet biochemical criteria
-    """
+    """ """
     # Define biochemical properties based on the paper's Table 1
     hydrogen_bond_acceptors = {
         'GLN': ['NE2'],
@@ -592,7 +541,7 @@ def check_biochemical_conditions(pockets_with_residues, file_path):
             biochemically_filtered_pockets[pocket_id] = pocket.copy()
             biochemically_filtered_pockets[pocket_id]['biochemical_properties'] = biochemical_properties
     
-    return biochemically_filtered_pockets
+    return biochemically_filtered_pockets """
 
 def run_pocket_detection(file_path, overlap_threshold=0.8):
     """
@@ -601,7 +550,13 @@ def run_pocket_detection(file_path, overlap_threshold=0.8):
     Returns:
     - final_pockets: Dictionary of filtered pockets that are likely to be active sites
     """
-    # Steps 1-3 (already implemented in your code)
+   
+    atoms_ids_and_coordinates = atoms_coordinates_dict(file_path)
+
+    print(create_bounding_box_and_voxels("1a6u.pdb", atoms_ids_and_coordinates))
+
+
+"""     # Steps 1-3 (already implemented in your code)
     # Get atom coordinates
     atoms_list, ids_list = get_atom_coordinates(file_path)
     
@@ -627,10 +582,11 @@ def run_pocket_detection(file_path, overlap_threshold=0.8):
     # Check biochemical conditions
     final_pockets = check_biochemical_conditions(pockets_with_residues, file_path)
     
-    return final_pockets
+    return final_pockets """
 
 # Example usage:
-final_pockets = run_pocket_detection("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
+file_path = "1a6u.pdb"
+final_pockets = run_pocket_detection(file_path)
 print(f"Found {len(final_pockets)} potential active site pockets")
 
 #run_pocket_detection("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
