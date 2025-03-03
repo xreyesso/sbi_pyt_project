@@ -174,11 +174,10 @@ def get_atom_coordinates(file_path):
         ids_list.append(identifier)
     return atoms_list, ids_list
     
-    #plt.show()
 
+## FUNCTION calls for testing/debugging
 #print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
 plot_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
-
 #plot_convex_hull_with_vertices("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
 
 file_path = "/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"
@@ -207,5 +206,3 @@ def get_bounding_box_for_triangle(x_0, y_0, z_0, x_1, y_1, z_1, x_2, y_2, z_2):
 
     bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
     return bounding_box_dict      
-
-# print(points[hull.vertices])
