@@ -109,14 +109,18 @@ def create_convex_hull(file_path):
         triangles = np.array(hull.simplices),
         linewidth = 0.2, antialiased=True)
 
-    plt.show()
+    #plt.show()
     # End of plot for convex hull
     return hull
 
 #print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
 
 def plot_convex_hull_with_vertices(file_path):
-    atoms_list = get_atom_coordinates(file_path)
+    #atoms_list = get_atom_coordinates(file_path)
+
+    atoms_list = []
+    for _ , _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
+        atoms_list.append((x_coordinate,y_coordinate,z_coordinate))
     
     atoms_np_array = np.array(atoms_list)
     hull = ConvexHull(atoms_np_array)  # Compute the convex hull
@@ -150,6 +154,9 @@ def plot_convex_hull_with_vertices(file_path):
     ax.set_zlabel('Z')
     ax.legend()
 
+    plt.show()
+
+
 def get_atom_coordinates(file_path):
     atoms_list = []
     ids_list = []
@@ -163,6 +170,8 @@ def get_atom_coordinates(file_path):
     #plt.show()
 
 #print(create_convex_hull("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"))
+
+plot_convex_hull_with_vertices("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
 
 file_path = "/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb"
 hull = create_convex_hull(file_path)
