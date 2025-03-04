@@ -311,7 +311,7 @@ def compute_pocket_overlap(pockets, overlap_threshold=0.8):
         # Create a new merged pocket
         merged_pocket = {
             'atoms': pockets[p1_id]['atoms'],
-            'empty_voxels': pockets[p1_id]['empty_voxels'],
+            #'empty_voxels': pockets[p1_id]['empty_voxels'],
             'constituent_pockets': [p1_id]
         }
         merged[p1_id] = next_merged_id
@@ -329,7 +329,7 @@ def compute_pocket_overlap(pockets, overlap_threshold=0.8):
                     if overlap_matrix[next_id][p2_id] >= overlap_threshold or overlap_matrix[p2_id][next_id] >= overlap_threshold:
                         merged[p2_id] = next_merged_id
                         merged_pocket['atoms'].update(pockets[p2_id]['atoms'])
-                        merged_pocket['empty_voxels'].update(pockets[p2_id]['empty_voxels'])
+                        #merged_pocket['empty_voxels'].update(pockets[p2_id]['empty_voxels'])
                         merged_pocket['constituent_pockets'].append(p2_id)
                         pockets_merged_this_round.append(p2_id)
                         print(f"merged {p2_id} overlapping {next_id} into {next_merged_id}: {merged_pocket['constituent_pockets']}")
@@ -338,14 +338,14 @@ def compute_pocket_overlap(pockets, overlap_threshold=0.8):
         next_merged_id += 1
     print(len(merged_pockets))
     return merged_pockets
-"""
-def calculate_pocket_properties(merged_pockets, file_path):
-    """ """
+
+def calculate_pocket_properties(merged_pockets, atoms_coordinates):
+    """
     Step 7: Calculate physical properties of pockets (depth, surface area, volume)
     
     Returns:
     - pockets_with_properties: Dictionary of pockets with calculated properties
-    """ """
+    """
     pockets_with_properties = {}
     
     for pocket_id, pocket in merged_pockets.items():
@@ -353,18 +353,8 @@ def calculate_pocket_properties(merged_pockets, file_path):
         max_depth = 0
         pocket_atoms_coords = []
         
-        # Get coordinates of atoms in pocket
-        atom_coords_dict = {}
-        for _, atom_name, _, _, _, x, y, z in PDB_iterator(file_path):
-            atom_coords_dict[atom_name] = (x, y, z)
-        
         for atom_id in pocket['atoms']:
-            if atom_id in atom_coords_dict:
-                pocket_atoms_coords.append(atom_coords_dict[atom_id])
-        
-        # If there are no atoms in pocket, skip
-        if not pocket_atoms_coords:
-            continue
+            pocket_atoms_coords.append(atoms_coordinates[atom_id])
         
         # Calculate centroid of pocket atoms
         centroid = np.mean(pocket_atoms_coords, axis=0)
@@ -376,63 +366,58 @@ def calculate_pocket_properties(merged_pockets, file_path):
         
         # Approximate surface area (using convex hull of pocket atoms)
         if len(pocket_atoms_coords) >= 4:  # Need at least 4 points for 3D convex hull
-            try:
-                pocket_hull = ConvexHull(np.array(pocket_atoms_coords))
-                surface_area = pocket_hull.area
-                volume = pocket_hull.volume
-            except:
-                # If convex hull calculation fails, use simpler approximations
-                surface_area = len(pocket['atoms']) * 10  # Rough estimate
-                volume = len(pocket['atoms']) * 8  # Rough estimate
+            pocket_hull = ConvexHull(np.array(pocket_atoms_coords))
+            surface_area = pocket_hull.area
+            volume = pocket_hull.volume
         else:
             # Not enough points for convex hull
-            surface_area = len(pocket['atoms']) * 10  # Rough estimate
-            volume = len(pocket['atoms']) * 8  # Rough estimate
+            continue
         
         # Store properties
-        pockets_with_properties[pocket_id] = pocket.copy()
-        pockets_with_properties[pocket_id].update({
+        pockets_with_properties[pocket_id] = {
+            **pocket, # Copy all data from pocket into this new dictionary
             'depth': max_depth,
             'surface_area': surface_area,
             'volume': volume
-        })
+        }
     
     return pockets_with_properties
 
 def identify_pocket_residues(pockets_with_properties, file_path):
-    """ """
+    """
     Step 8: Identify residues corresponding to pocket atoms
     
     Returns:
     - pockets_with_residues: Dictionary of pockets with residue information
-    """ """
+    """
     pockets_with_residues = {}
     
     # Create a mapping from atom ID to residue
     atom_to_residue = {}
-    for identifier, atom_name, residue_name, chain_ID, residue_ID, x, y, z in PDB_iterator(file_path):
+    for identifier, _, residue_name, chain_ID, residue_ID, _, _, _ in PDB_iterator(file_path):
         residue_info = (residue_name, chain_ID, residue_ID)
         atom_to_residue[identifier] = residue_info
     
     for pocket_id, pocket in pockets_with_properties.items():
         residues = set()
         for atom_id in pocket['atoms']:
-            if atom_id in atom_to_residue:
-                residues.add(atom_to_residue[atom_id])
+            residues.add(atom_to_residue[atom_id])
         
         # Store residue information
-        pockets_with_residues[pocket_id] = pocket.copy()
-        pockets_with_residues[pocket_id]['residues'] = list(residues)
+        pockets_with_residues[pocket_id] = {
+            **pocket,
+            'residues': residues,
+        }
     
     return pockets_with_residues
 
 def check_biochemical_conditions(pockets_with_residues, file_path):
-    """ """
+    """
     Step 9: Check biochemical conditions for pockets
     
     Returns:
     - biochemically_filtered_pockets: Dictionary of pockets that meet biochemical criteria
-    """ """
+    """
     # Define biochemical properties based on the paper's Table 1
     hydrogen_bond_acceptors = {
         'GLN': ['NE2'],
@@ -528,10 +513,12 @@ def check_biochemical_conditions(pockets_with_residues, file_path):
         is_potential_active_site = (ha_bonds + hd_bonds > 0) and (vdw_bonds + ion_bonds + sul_bonds + c_rings > 0)
         
         if is_potential_active_site:
-            biochemically_filtered_pockets[pocket_id] = pocket.copy()
-            biochemically_filtered_pockets[pocket_id]['biochemical_properties'] = biochemical_properties
+            biochemically_filtered_pockets[pocket_id] = {
+                **pocket,
+                'biochemical_properties': biochemical_properties,
+            }
     
-    return biochemically_filtered_pockets """
+    return biochemically_filtered_pockets
 
 def run_pocket_detection(file_path, overlap_threshold=0.8):
     """
@@ -557,9 +544,11 @@ def run_pocket_detection(file_path, overlap_threshold=0.8):
    
     # Compute pocket overlap and merge pockets
     merged_pockets = compute_pocket_overlap(pockets, overlap_threshold)
-"""     
+
     # Calculate pocket properties
-    pockets_with_properties = calculate_pocket_properties(merged_pockets, file_path)
+    pockets_with_properties = calculate_pocket_properties(merged_pockets, atoms_ids_and_coordinates)
+    print(pockets_with_properties)
+    print(len(pockets_with_properties))
     
     # Identify pocket residues
     pockets_with_residues = identify_pocket_residues(pockets_with_properties, file_path)
@@ -567,7 +556,7 @@ def run_pocket_detection(file_path, overlap_threshold=0.8):
     # Check biochemical conditions
     final_pockets = check_biochemical_conditions(pockets_with_residues, file_path)
     
-    return final_pockets """
+    return final_pockets
 
 # Example usage:
 file_path = "1a6u.pdb"
