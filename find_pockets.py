@@ -264,8 +264,8 @@ def define_pockets_from_triangles(hull, ids_list, atoms_coordinates, box, voxel_
         
         # Store pocket information
         pockets[idx] = {
-            'atoms': list(set(pocket_atoms)),  # Remove duplicates
-            'empty_voxels': pocket_empty_voxels,
+            'atoms': set(pocket_atoms),  # Remove duplicates
+            'empty_voxels': set(pocket_empty_voxels),
             'triangle_vertices': [p1, p2, p3],
             'normal': normal,
             'boundary': {
@@ -274,23 +274,24 @@ def define_pockets_from_triangles(hull, ids_list, atoms_coordinates, box, voxel_
                 'z_range': (t_zmin, t_zmax)
             }
         }
-    print(pockets)
+    #print(pockets)
     return pockets
-"""
+
 def compute_pocket_overlap(pockets, overlap_threshold=0.8):
-    """ """
+    """
     Step 6: Compute overlap between pockets and merge those with high overlap
     
     Returns:
     - merged_pockets: Dictionary of merged pockets
-    """ """
+    """
+    # Computes overlap in both directions and stores it as a matrix
     overlap_matrix = {}
     for p1_id in pockets:
         overlap_matrix[p1_id] = {}
         for p2_id in pockets:
             if p1_id != p2_id:
-                p1_atoms = set(pockets[p1_id]['atoms'])
-                p2_atoms = set(pockets[p2_id]['atoms'])
+                p1_atoms = pockets[p1_id]['atoms']
+                p2_atoms = pockets[p2_id]['atoms']
                 
                 if len(p1_atoms) > 0:
                     overlap = len(p1_atoms.intersection(p2_atoms)) / len(p1_atoms)
@@ -300,7 +301,7 @@ def compute_pocket_overlap(pockets, overlap_threshold=0.8):
     
     # Merge pockets with overlap greater than threshold
     merged = {}  # Maps original pocket IDs to merged pocket IDs
-    merged_pockets = {}
+    merged_pockets = {} # Dictionary from pocket id to pocket data
     next_merged_id = 0
     
     for p1_id in pockets:
@@ -309,30 +310,35 @@ def compute_pocket_overlap(pockets, overlap_threshold=0.8):
             
         # Create a new merged pocket
         merged_pocket = {
-            'atoms': set(pockets[p1_id]['atoms']),
-            'empty_voxels': list(pockets[p1_id]['empty_voxels']),
+            'atoms': pockets[p1_id]['atoms'],
+            'empty_voxels': pockets[p1_id]['empty_voxels'],
             'constituent_pockets': [p1_id]
         }
         merged[p1_id] = next_merged_id
+
+        pockets_merged_this_round = [p1_id]
+        while pockets_merged_this_round:
+            # check if the next_id pocket overlaps with any other pockets,
+            # if it does, add to the merged pocket,
+            # and add the overlapping pockets to the list of pockets merged this round.
+            next_id = pockets_merged_this_round.pop()
         
-        # Find all pockets that overlap with p1_id above threshold
-        for p2_id in pockets:
-            if p1_id != p2_id and p2_id not in merged:
-                if p1_id in overlap_matrix and p2_id in overlap_matrix[p1_id]:
-                    overlap = overlap_matrix[p1_id][p2_id]
-                    if overlap >= overlap_threshold:
+            # Find all pockets that overlap with p1_id above threshold
+            for p2_id in pockets:
+                if p2_id not in merged:
+                    if overlap_matrix[next_id][p2_id] >= overlap_threshold or overlap_matrix[p2_id][next_id] >= overlap_threshold:
                         merged[p2_id] = next_merged_id
                         merged_pocket['atoms'].update(pockets[p2_id]['atoms'])
-                        merged_pocket['empty_voxels'].extend(pockets[p2_id]['empty_voxels'])
+                        merged_pocket['empty_voxels'].update(pockets[p2_id]['empty_voxels'])
                         merged_pocket['constituent_pockets'].append(p2_id)
+                        pockets_merged_this_round.append(p2_id)
+                        print(f"merged {p2_id} overlapping {next_id} into {next_merged_id}: {merged_pocket['constituent_pockets']}")
         
-        # Convert atoms back to list
-        merged_pocket['atoms'] = list(merged_pocket['atoms'])
         merged_pockets[next_merged_id] = merged_pocket
         next_merged_id += 1
-    
+    print(len(merged_pockets))
     return merged_pockets
-
+"""
 def calculate_pocket_properties(merged_pockets, file_path):
     """ """
     Step 7: Calculate physical properties of pockets (depth, surface area, volume)
@@ -548,10 +554,10 @@ def run_pocket_detection(file_path, overlap_threshold=0.8):
 
     # Define pockets from triangles
     pockets = define_pockets_from_triangles(hull, ids_list, atoms_ids_and_coordinates, box, voxel_grid, voxel_atom_map)
-"""    
+   
     # Compute pocket overlap and merge pockets
     merged_pockets = compute_pocket_overlap(pockets, overlap_threshold)
-    
+"""     
     # Calculate pocket properties
     pockets_with_properties = calculate_pocket_properties(merged_pockets, file_path)
     
