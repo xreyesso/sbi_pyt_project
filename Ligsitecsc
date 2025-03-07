@@ -1,0 +1,489 @@
+import sys
+import math
+import numpy as np
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+from scipy.spatial import ConvexHull, cKDTree
+from collections import defaultdict, Counter
+
+def PDB_iterator(pdb_file_path=None):
+    """Iterate through ATOM records in a PDB file."""
+    if pdb_file_path is None:
+        fi = sys.stdin
+    else:
+        fi = open(pdb_file_path, "r")
+
+    for line in fi:
+        line = line.strip()
+        record_name = line[0:6].strip()
+
+        if record_name == "ATOM":
+            serial_number = int(line[6:11].strip())
+            atom_name = line[12:16].strip()
+            residue_name = line[17:20].strip()
+            chain_ID = line[21].strip()
+            residue_ID = int(line[22:26].strip())
+            x_coordinate = float(line[30:38].strip())
+            y_coordinate = float(line[38:46].strip())
+            z_coordinate = float(line[46:54].strip())
+            yield(serial_number, atom_name, residue_name, chain_ID, residue_ID, x_coordinate, y_coordinate, z_coordinate)
+
+    fi.close()
+
+def get_atoms_and_residues(pdb_file_path):
+    """Extract atoms and residues from PDB file."""
+    atoms_coords = []
+    atom_id_coords_dict = {}
+    residues = {}
+    
+    for atom_id, atom_name, residue_name, chain_ID, residue_ID, x, y, z in PDB_iterator(pdb_file_path):
+        atom_id_coords_dict[atom_id] = (x, y, z)
+        atoms_coords.append((x, y, z))
+        
+        # Store residue information
+        residue_key = (chain_ID, residue_ID)
+        if residue_key not in residues:
+            residues[residue_key] = {
+                'name': residue_name,
+                'atoms': []
+            }
+        residues[residue_key]['atoms'].append((atom_id, atom_name, (x, y, z)))
+    
+    return np.array(atoms_coords), atom_id_coords_dict, residues
+
+def align_protein_using_pca(atoms_coords):
+    """Align protein along principal axes using PCA."""
+    # Perform PCA
+    pca = PCA(n_components=3)
+    pca.fit(atoms_coords)
+    
+    # Transform coordinates
+    transformed_coords = pca.transform(atoms_coords)
+    
+    # Create rotation matrix for later use
+    rotation_matrix = pca.components_
+    
+    return transformed_coords, rotation_matrix, pca.mean_
+
+def create_grid(coords, padding=2.0, step_size=1.0):
+    """Create a 3D grid around the protein with specified padding."""
+    min_coords = np.min(coords, axis=0) - padding
+    max_coords = np.max(coords, axis=0) + padding
+    
+    # Calculate grid dimensions
+    nx = int(math.ceil((max_coords[0] - min_coords[0]) / step_size))
+    ny = int(math.ceil((max_coords[1] - min_coords[1]) / step_size))
+    nz = int(math.ceil((max_coords[2] - min_coords[2]) / step_size))
+    
+    print(f"Grid dimensions: {nx} x {ny} x {nz} = {nx * ny * nz} points")
+    
+    # Initialize grid
+    grid = np.zeros((nx, ny, nz), dtype=np.int8)
+    
+    return grid, min_coords, (nx, ny, nz), step_size
+
+def label_protein_and_solvent(grid, coords, min_coords, step_size, protein_radius=1.6):
+    """Label grid points as protein (1) or solvent (0)."""
+    # Create a KD tree for efficient neighbor search
+    tree = cKDTree(coords)
+    
+    # Create grid point coordinates
+    nx, ny, nz = grid.shape
+    all_points = []
+    
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                # Convert grid indices to real-space coordinates
+                x = min_coords[0] + i * step_size
+                y = min_coords[1] + j * step_size
+                z = min_coords[2] + k * step_size
+                all_points.append((x, y, z))
+    
+    all_points = np.array(all_points)
+    
+    # Find all points within protein_radius of any atom
+    distances, _ = tree.query(all_points, k=1)
+    protein_mask = distances <= protein_radius
+    
+    # Update grid
+    for idx, is_protein in enumerate(protein_mask):
+        if is_protein:
+            i, j, k = idx // (ny * nz), (idx % (ny * nz)) // nz, idx % nz
+            grid[i, j, k] = 1  # Protein
+    
+    return grid, all_points
+
+def compute_connolly_surface(coords, probe_radius=1.4, num_points=1000):
+    """Approximate Connolly surface using a probe sphere."""
+    # Create a KD tree for efficient neighbor search
+    tree = cKDTree(coords)
+    
+    # Generate points on a unit sphere
+    phi = np.linspace(0, 2*np.pi, int(np.sqrt(num_points)))
+    theta = np.linspace(0, np.pi, int(np.sqrt(num_points)))
+    phi, theta = np.meshgrid(phi, theta)
+    
+    x = np.sin(theta) * np.cos(phi)
+    y = np.sin(theta) * np.sin(phi)
+    z = np.cos(theta)
+    
+    unit_sphere = np.vstack((x.flatten(), y.flatten(), z.flatten())).T
+    
+    # Find surface points
+    surface_points = []
+    
+    for atom_coord in coords:
+        for direction in unit_sphere:
+            # Position probe sphere
+            probe_center = atom_coord + direction * (probe_radius + 1.6)  # vdW radius + probe radius
+            
+            # Check if probe intersects with any other atom
+            distances, _ = tree.query(probe_center, k=2)  # k=2 to get the closest and second closest
+            
+            # If closest distance is from the original atom and no other atom is too close
+            if distances[0] >= probe_radius - 0.1 and distances[1] >= probe_radius - 0.1:
+                surface_points.append(probe_center)
+    
+    return np.array(surface_points)
+
+def label_surface(grid, surface_points, min_coords, step_size, surface_threshold=1.0):
+    """Label grid points as surface (2) if they are close to surface points."""
+    # Create a KD tree for efficient neighbor search
+    tree = cKDTree(surface_points)
+    
+    # Process each grid point
+    nx, ny, nz = grid.shape
+    
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                # Skip if not protein
+                if grid[i, j, k] != 1:
+                    continue
+                
+                # Convert grid indices to real-space coordinates
+                x = min_coords[0] + i * step_size
+                y = min_coords[1] + j * step_size
+                z = min_coords[2] + k * step_size
+                
+                # Check if point is close to surface
+                distances, _ = tree.query(np.array([[x, y, z]]), k=1)
+                
+                if distances[0] <= surface_threshold:
+                    grid[i, j, k] = 2  # Surface
+    
+    return grid
+
+def scan_for_sss_events(grid, min_sss=6):
+    """Scan for surface-solvent-surface events in 7 directions."""
+    nx, ny, nz = grid.shape
+    pocket_grid = np.zeros_like(grid)
+    
+    # Define the 7 scanning directions (x, y, z, and 4 cubic diagonals)
+    directions = [
+        (1, 0, 0),  # x
+        (0, 1, 0),  # y
+        (0, 0, 1),  # z
+        (1, 1, 1),  # diagonal 1
+        (1, 1, -1), # diagonal 2
+        (1, -1, 1), # diagonal 3
+        (1, -1, -1) # diagonal 4
+    ]
+    
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                # Skip if not solvent
+                if grid[i, j, k] != 0:
+                    continue
+                
+                sss_count = 0
+                
+                # Scan in each direction
+                for dx, dy, dz in directions:
+                    # Look for surface-solvent-surface events
+                    found_first_surface = False
+                    found_sss = False
+                    
+                    # Scan forward
+                    for step in range(1, max(nx, ny, nz)):
+                        ni, nj, nk = i + dx*step, j + dy*step, k + dz*step
+                        
+                        # Check bounds
+                        if not (0 <= ni < nx and 0 <= nj < ny and 0 <= nk < nz):
+                            break
+                        
+                        if not found_first_surface and grid[ni, nj, nk] == 2:  # Found first surface
+                            found_first_surface = True
+                        elif found_first_surface and grid[ni, nj, nk] == 2:  # Found second surface (SSS event)
+                            found_sss = True
+                            break
+                        elif found_first_surface and grid[ni, nj, nk] != 0:  # Hit protein but not surface
+                            break
+                    
+                    # Scan backward if we haven't found an SSS event yet
+                    if not found_sss and found_first_surface:
+                        for step in range(1, max(nx, ny, nz)):
+                            ni, nj, nk = i - dx*step, j - dy*step, k - dz*step
+                            
+                            # Check bounds
+                            if not (0 <= ni < nx and 0 <= nj < ny and 0 <= nk < nz):
+                                break
+                            
+                            if grid[ni, nj, nk] == 2:  # Found surface (SSS event)
+                                found_sss = True
+                                break
+                            elif grid[ni, nj, nk] != 0:  # Hit protein but not surface
+                                break
+                    
+                    if found_sss:
+                        sss_count += 1
+                
+                # If enough SSS events, mark as pocket
+                if sss_count >= min_sss:
+                    pocket_grid[i, j, k] = 1
+    
+    return pocket_grid
+
+def cluster_pockets(pocket_grid, min_coords, step_size, cluster_distance=3.0):
+    """Cluster pocket grid points and rank clusters by size."""
+    nx, ny, nz = pocket_grid.shape
+    pocket_points = []
+    
+    # Collect all pocket points
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                if pocket_grid[i, j, k] == 1:
+                    # Convert grid indices to real-space coordinates
+                    x = min_coords[0] + i * step_size
+                    y = min_coords[1] + j * step_size
+                    z = min_coords[2] + k * step_size
+                    pocket_points.append((x, y, z))
+    
+    pocket_points = np.array(pocket_points)
+    
+    if len(pocket_points) == 0:
+        print("No pocket points found.")
+        return []
+    
+    # Cluster pocket points
+    clusters = []
+    remaining_points = list(range(len(pocket_points)))
+    
+    while remaining_points:
+        # Start a new cluster with the first remaining point
+        current_cluster = [remaining_points[0]]
+        remaining_points.pop(0)
+        
+        # Find all points within cluster_distance of any point in the cluster
+        points_added = True
+        while points_added:
+            points_added = False
+            new_remaining = []
+            
+            for idx in remaining_points:
+                # Check if point is within cluster_distance of any point in the cluster
+                min_distance = float('inf')
+                for cluster_idx in current_cluster:
+                    distance = np.linalg.norm(pocket_points[idx] - pocket_points[cluster_idx])
+                    min_distance = min(min_distance, distance)
+                
+                if min_distance <= cluster_distance:
+                    current_cluster.append(idx)
+                    points_added = True
+                else:
+                    new_remaining.append(idx)
+            
+            remaining_points = new_remaining
+        
+        # Add cluster to the list
+        cluster_points = pocket_points[current_cluster]
+        center_of_mass = np.mean(cluster_points, axis=0)
+        clusters.append({
+            'center': center_of_mass,
+            'size': len(current_cluster),
+            'points': cluster_points
+        })
+    
+    # Rank clusters by size
+    clusters.sort(key=lambda x: x['size'], reverse=True)
+    
+    return clusters
+
+def identify_surface_residues(clusters, residues, coords, atom_id_coords_dict, radius=8.0):
+    """Identify surface residues within radius of cluster centers."""
+    # Convert atom_id_coords_dict to array format for KDTree
+    atom_ids = list(atom_id_coords_dict.keys())
+    atom_coords = np.array([atom_id_coords_dict[aid] for aid in atom_ids])
+    
+    # Create KDTree for efficient neighbor search
+    tree = cKDTree(atom_coords)
+    
+    for cluster in clusters:
+        # Find atoms within radius of cluster center
+        indices = tree.query_ball_point(cluster['center'], radius)
+        nearby_atom_ids = [atom_ids[i] for i in indices]
+        
+        # Identify residues
+        cluster_residues = set()
+        for atom_id in nearby_atom_ids:
+            # Find which residue this atom belongs to
+            for residue_key, residue_data in residues.items():
+                for atom_info in residue_data['atoms']:
+                    if atom_info[0] == atom_id:
+                        cluster_residues.add(residue_key)
+                        break
+        
+        # Store residues in cluster
+        cluster['residues'] = cluster_residues
+        
+        # Get residue names for reporting
+        residue_names = [f"{residues[res_key]['name']}{res_key[1]}" for res_key in cluster_residues]
+        cluster['residue_names'] = residue_names
+    
+    return clusters
+
+def run_ligsite_csc(pdb_file_path, min_sss=6, cluster_distance=3.0, probe_radius=1.4):
+    """Run the complete LIGSITEcsc algorithm on a PDB file."""
+    print(f"Processing {pdb_file_path}...")
+    
+    # Step 1: Extract atoms and align using PCA
+    print("Extracting atoms and aligning protein...")
+    atoms_coords, atom_id_coords_dict, residues = get_atoms_and_residues(pdb_file_path)
+    aligned_coords, rotation_matrix, pca_mean = align_protein_using_pca(atoms_coords)
+    
+    # Step 2: Create grid
+    print("Creating grid...")
+    grid, min_coords, grid_dims, step_size = create_grid(aligned_coords, padding=2.0, step_size=1.0)
+    
+    # Step 3: Label protein and solvent
+    print("Labeling protein and solvent...")
+    grid, all_grid_points = label_protein_and_solvent(grid, aligned_coords, min_coords, step_size)
+    
+    # Step 4: Compute Connolly surface
+    print("Computing Connolly surface...")
+    surface_points = compute_connolly_surface(aligned_coords, probe_radius)
+    print(f"Found {len(surface_points)} surface points")
+    
+    # Step 5: Label surface grid points
+    print("Labeling surface grid points...")
+    grid = label_surface(grid, surface_points, min_coords, step_size)
+    
+    # Count grid point types
+    protein_count = np.sum(grid == 1)
+    surface_count = np.sum(grid == 2)
+    solvent_count = np.sum(grid == 0)
+    print(f"Grid contains: {protein_count} protein points, {surface_count} surface points, {solvent_count} solvent points")
+    
+    # Step 6: Scan for surface-solvent-surface events
+    print("Scanning for surface-solvent-surface events...")
+    pocket_grid = scan_for_sss_events(grid, min_sss)
+    pocket_count = np.sum(pocket_grid == 1)
+    print(f"Found {pocket_count} pocket grid points")
+    
+    # Step 7: Cluster pocket grid points
+    print("Clustering pocket grid points...")
+    clusters = cluster_pockets(pocket_grid, min_coords, step_size, cluster_distance)
+    print(f"Found {len(clusters)} clusters")
+    
+    # Step 8: Identify surface residues near pocket clusters
+    print("Identifying surface residues...")
+    clusters = identify_surface_residues(clusters, residues, aligned_coords, 
+                                       {id: tuple(aligned_coords[i]) for i, id in enumerate(atom_id_coords_dict.keys())})
+    
+    # Step 9: Transform cluster centers back to original coordinate system
+    for cluster in clusters:
+        # Reverse the PCA transformation
+        original_center = np.dot(cluster['center'], rotation_matrix) + pca_mean
+        cluster['original_center'] = original_center
+    
+    # Return top 3 clusters
+    return clusters[:3] if clusters else []
+
+def visualize_results(pdb_file_path, clusters, atom_id_coords_dict, output_file=None):
+    """Visualize protein and predicted pocket centers."""
+    # Extract atom coordinates
+    atom_coords = np.array(list(atom_id_coords_dict.values()))
+    
+    # Create 3D plot
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Plot protein atoms as small dots
+    ax.scatter(atom_coords[:, 0], atom_coords[:, 1], atom_coords[:, 2], c='gray', s=1, alpha=0.5)
+    
+    # Plot pocket centers with different colors
+    colors = ['red', 'blue', 'green']
+    for i, cluster in enumerate(clusters[:3]):
+        center = cluster['original_center']
+        ax.scatter(center[0], center[1], center[2], c=colors[i], s=100, label=f"Pocket {i+1}")
+        
+        # Draw a sphere to represent the pocket volume
+        r = (cluster['size'] / np.pi) ** (1/3)  # Approximate radius from size
+        u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
+        x = center[0] + r * np.cos(u) * np.sin(v)
+        y = center[1] + r * np.sin(u) * np.sin(v)
+        z = center[2] + r * np.cos(v)
+        ax.plot_surface(x, y, z, color=colors[i], alpha=0.2)
+    
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title(f'Predicted Binding Pockets for {pdb_file_path}')
+    plt.legend()
+    
+    if output_file:
+        plt.savefig(output_file)
+    else:
+        plt.show()
+
+def report_results(clusters):
+    """Generate a report of predicted binding pockets."""
+    print("\n=== LIGSITEcsc Results ===")
+    
+    if not clusters:
+        print("No binding pockets found.")
+        return
+    
+    for i, cluster in enumerate(clusters):
+        print(f"\nPocket {i+1}:")
+        print(f"  Center: ({cluster['original_center'][0]:.2f}, {cluster['original_center'][1]:.2f}, {cluster['original_center'][2]:.2f})")
+        print(f"  Size: {cluster['size']} grid points")
+        print(f"  Nearby residues: {len(cluster['residue_names'])}")
+        
+        # Print most common residue types
+        if cluster['residue_names']:
+            res_counter = Counter([name[:3] for name in cluster['residue_names']])
+            print("  Residue composition:")
+            for res, count in res_counter.most_common(5):
+                print(f"    {res}: {count}")
+        
+        # Print actual residue list (limited to first 10)
+        if len(cluster['residue_names']) > 0:
+            print(f"  Residues: {', '.join(sorted(cluster['residue_names'][:10]))}")
+            if len(cluster['residue_names']) > 10:
+                print(f"    ... and {len(cluster['residue_names']) - 10} more")
+
+# Main execution
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python ligsite_csc.py <pdb_file>")
+        sys.exit(1)
+    
+    pdb_file = sys.argv[1]
+    
+    # Run LIGSITEcsc algorithm
+    clusters = run_ligsite_csc(pdb_file)
+    
+    # Report results
+    report_results(clusters)
+    
+    # Visualize results if matplotlib is available
+    try:
+        atom_coords, _, _ = get_atoms_and_residues(pdb_file)
+        atom_id_coords_dict = {i: tuple(coord) for i, coord in enumerate(atom_coords)}
+        visualize_results(pdb_file, clusters, atom_id_coords_dict)
+    except Exception as e:
+        print(f"Visualization error: {e}")
