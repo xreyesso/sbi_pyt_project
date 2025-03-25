@@ -13,6 +13,14 @@ from collections import defaultdict
 # calleda protein-solvent-protein (PSP) event.
 # Step 5: Detect pockets as regions of voxels with a minimum number of PSP events (MIN_PSP)
 # Check nearest neighbors
+# STEP 6
+# Distinguish cavities
+# STEP 7
+# Determine the surface of a pocket
+# STEP 8
+# Identify the aminoacids and atoms that surround the surface of a pocket
+# STEP 9
+# Prepare output and display
 
 van_der_Waals_radii = {
     "C": 1.70,
@@ -251,6 +259,13 @@ def distinguish_cavities(voxel_grid, MIN_PSP = 2):
 def determine_pocket_surface():
     # input: the list/dictionary pockets from step 5
     pass
+
+# STEP 8
+# Identify the aminoacids and atoms that surround the surface of a pocket
+
+# STEP 9
+# Prepare output and display, for example create a PDB-like file
+# Prepare a file that can be read by PyMol
 
 def run_complete_workflow(file_path):
     
