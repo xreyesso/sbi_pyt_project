@@ -112,7 +112,7 @@ def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
     bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
 
     # Add 1 to ensure we cover the bounding box
-    # TODO: is 1 or voxel_size what we need to add??
+    # TODO: is 1 or voxel_size what we need to add?? It's 1, it's indices not cartesian coordinates, voxel_size is the wrong unit
     range_x = math.floor((xmax - xmin)/voxel_size) + 1
     range_y = math.floor((ymax - ymin)/voxel_size) + 1
     range_z = math.floor((zmax - zmin)/voxel_size) + 1
@@ -210,10 +210,11 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
     else:
         raise ValueError("Axis must be 'x', 'y' or 'z'")
 
+
     for i in dim1_range:
-        for j in dim2_range:
-            scanline = []
-            index_map = []
+        for j in dim2_range: # for all lines parallel to the indicated axis
+            solvent_voxels = None
+            occupied_voxel = False
 
             for s in scan_range:
                 if axis == 'x':
@@ -223,12 +224,16 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
                 else:
                     key = (i, j, s)
 
-                scanline.append(voxel_grid[key])
-                index_map.append(key)
-                # Scan along x-axis, from 0 to range_x
-            
-            # Process this scanline to decide if there are PSP events
-            mark_enclosed_voxels(scanline, index_map, voxel_grid)
+                if voxel_grid[key] == -1:
+                    occupied_voxel = True
+                    if solvent_voxels is not None:
+                        for key2 in solvent_voxels:
+                            voxel_grid[key2] += 1 # Add 1 for the solvent voxels in between protein voxels
+                    solvent_voxels = [] # Reset the solvent voxels list so we do not process them multiple times
+                else:
+                    if occupied_voxel:
+                        solvent_voxels.append(key) # Only keep track of solvent voxels if they come after a protein (occupied) voxel
+                
              
 # STEP 4
 # Scan along the diagonals
