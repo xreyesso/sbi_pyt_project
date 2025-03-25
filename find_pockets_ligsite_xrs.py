@@ -118,7 +118,7 @@ def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
                 #Store in a dictionary with the indices i,j,k as key
                 voxel_grid[(i,j,k)] = 0
     
-    return bounding_box_dict, voxel_grid
+    return bounding_box_dict, voxel_grid, (range_x, range_y, range_z)
 
 
 # For atom in PDB determine all coordinates of voxels that overlap with this atom
@@ -180,8 +180,48 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
 # STEP 3
 # Find solvent-accessible voxels (value = 0) that are enclosed between inaccessible voxels (value = -1)
 # along straight lines
-def scan_along_x_y_z(voxel_grid):
+# We are looking for runs of zeros that are enclosed on both sides by -1, only those get incremented by 1
+def mark_enclosed_voxels(scanline, index_map, voxel_grid):
     pass
+
+def scan_along_axis(atom_coordinates, voxel_grid, axis):
+    _, _, (range_x, range_y, range_z) = create_bounding_box_and_voxels(atom_coordinates)
+
+    if axis == 'x':
+        scan_range = range(range_x)
+        dim1_range = range(range_y)
+        dim2_range = range(range_z)
+    elif axis == 'y':
+        dim1_range = range(range_x)
+        scan_range = range(range_y)
+        dim2_range = range(range_z)
+    elif axis == 'z':
+        dim1_range = range(range_x)
+        dim2_range = range(range_y)
+        scan_range = range(range_y)
+    else:
+        raise ValueError("Axis must be 'x', 'y' or 'z'")
+
+    for i in dim1_range:
+        for j in dim2_range:
+            scanline = []
+            index_map = []
+
+            for s in scan_range:
+                if axis == 'x':
+                    key = (s, i, j)
+                elif axis == 'y':
+                    key = (i, s, j)
+                else:
+                    key = (i, j, s)
+
+                scanline.append(voxel_grid[key])
+                index_map.append(key)
+                # Scan along x-axis, from 0 to range_x
+            
+            # Process this scanline to decide if there are PSP events
+            mark_enclosed_voxels(scanline, index_map, voxel_grid)
+             
 
 def run_complete_workflow(file_path):
     
@@ -192,7 +232,7 @@ def run_complete_workflow(file_path):
 
     voxel_grid = mark_occupied_voxels(atoms_ids_and_coordinates, file_path)
     print(voxel_grid)
-    
-    scan_along_x_y_z(voxel_grid)
+
+    scan_along_axis(voxel_grid)
 
 run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb")
