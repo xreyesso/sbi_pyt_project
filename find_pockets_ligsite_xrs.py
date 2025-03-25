@@ -44,7 +44,7 @@ def atoms_coordinates_dict(file_path):
     for atom_id, _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
         atom_id_coords_dict[atom_id] = (x_coordinate, y_coordinate, z_coordinate)
     return atom_id_coords_dict
-print(atoms_coordinates_dict("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb"))
+#print(atoms_coordinates_dict("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb"))
 
 def get_atoms_and_residues(pdb_file_path):
     """Extract atoms and residues from PDB file."""
@@ -67,7 +67,7 @@ def get_atoms_and_residues(pdb_file_path):
     
     return np.array(atoms_coords), atom_id_coords_dict, residues
     #return atom_id_coords_dict
-print(get_atoms_and_residues("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb"))
+#print(get_atoms_and_residues("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb"))
     
 # The next step is to divide the 3D space (the bounding box in this case) into small cubes of x Angstrom per side
 def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
@@ -80,7 +80,6 @@ def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
             x_coords.append(coordinates[0])
             y_coords.append(coordinates[1])
             z_coords.append(coordinates[2])
-    
    
     r_max = r_atom_max + probe_radius
 
@@ -113,11 +112,11 @@ def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
 
 # For atom in PDB determine all coordinates of voxels that overlap with this atom
 # set the grid coordinates to -1 if that’s the case 
-def determine_if_within_bounding_cube_for_atom(center, point):
-    # Compute Euclidean distance from atom center to voxel center
-    distance = np.linalg.norm(center - point)
-    if distance <= van_der_Waals_radii[center]:
-        return True
+# def determine_if_within_bounding_cube_for_atom(center, point):
+#     # Compute Euclidean distance from atom center to voxel center
+#     distance = np.linalg.norm(center - point)
+#     if distance <= van_der_Waals_radii[center]:
+#         return True
 
 
 def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
@@ -151,67 +150,30 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
         for l in range(i0, i1 + 1):
             for m in range(j0, j1 + 1):
                 for n in range(k0, k1 + 1):
-                    # Convert voxel index to Cartesian coordinate
-                    voxel_x = xmin + l*voxel_size
-                    voxel_y = ymin + m*voxel_size
-                    voxel_z = zmin + n*voxel_size
+                    # Convert voxel index to Cartesian coordinate and add voxel_size/2 to each 
+                    # coordinate to get the voxel center
+                    voxel_x = xmin + l*voxel_size + voxel_size / 2
+                    voxel_y = ymin + m*voxel_size + voxel_size / 2
+                    voxel_z = zmin + n*voxel_size + voxel_size / 2
 
-                    # Compute distance to atom center
+                    # Compute distance from voxel center to atom center
                     distance = math.sqrt((voxel_x - x)**2 + (voxel_y - y)**2 + (voxel_z - z)**2)
                    
                     if distance <= r:
                         if (l, m, n) in voxel_grid:
                             # Mark voxel as-1, i.e.occupied
-                            voxel_grid[(i,j,k)] = -1
+                            voxel_grid[(l,m,n)] = -1
     
     return voxel_grid
 
-def identify_filled_empty_voxels(file_path, voxel_size=1.0):
-    """
-    Step 4: Separate empty voxels from voxels filled by protein atoms in the convex hull
+def run_complete_workflow(file_path):
     
-    Returns:
-    - voxel_grid: Dictionary with voxel indices as keys and 'filled' or 'empty' as values
-    - atom_voxel_map: Dictionary mapping each atom index to its voxel
-    - voxel_atom_map: Dictionary mapping each filled voxel to the atoms it contains
-    """
-    box_coordinates = define_bounding_box(file_path)
-    xmin, xmax = box_coordinates["X"]
-    ymin, ymax = box_coordinates["Y"]
-    zmin, zmax = box_coordinates["Z"]
-    
-    # Calculate grid dimensions
-    range_x = math.ceil((xmax - xmin)/voxel_size)
-    range_y = math.ceil((ymax - ymin)/voxel_size)
-    range_z = math.ceil((zmax - zmin)/voxel_size)
-    
-    # Initialize voxel grid
-    voxel_grid = {}
-    for i in range(range_x):
-        for j in range(range_y):
-            for k in range(range_z):
-                voxel_grid[(i, j, k)] = 'empty'
-    
-    # Map atoms to voxels
-    atom_voxel_map = {}
-    voxel_atom_map = defaultdict(list)
-    
-    for idx, (identifier, atom_name, _, _, _, x, y, z) in enumerate(PDB_iterator(file_path)):
-        # Determine which voxel this atom is in
-        i = int((x - xmin) / voxel_size)
-        j = int((y - ymin) / voxel_size)
-        k = int((z - zmin) / voxel_size)
-        
-        voxel_idx = (i, j, k)
-        voxel_grid[voxel_idx] = 'filled'
-        atom_voxel_map[identifier] = voxel_idx
-        voxel_atom_map[voxel_idx].append(identifier)
-    
-    # Get convex hull to determine which empty voxels are inside
-    atoms_list = []
-    for _, _, _, _, _, x, y, z in PDB_iterator(file_path):
-        atoms_list.append((x, y, z))
-    
-    hull = ConvexHull(np.array(atoms_list))
-    
-    return voxel_grid, atom_voxel_map, voxel_atom_map, hull
+    atoms_ids_and_coordinates = atoms_coordinates_dict(file_path)
+
+    # Create voxels
+    box, voxel_grid = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
+
+
+    print(mark_occupied_voxels(atoms_ids_and_coordinates, file_path))
+
+run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb")
