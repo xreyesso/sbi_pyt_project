@@ -3,6 +3,16 @@ import sys
 import math
 from collections import defaultdict
 
+# Step 0: Read PDB file and get atom coordinates
+# Step 1: create 3D grid for the protein
+# Step 2: Set a value for each voxel. We start by setting all voxels to 0
+# a voxel that is inaccessible to solvent (because it is already occupied by the protein) gets a value of -1
+# Step 3: Scan along the x, y and z axis to detect solvent voxels enclosed on both sides by -1
+# Step 4: Scan along 4 cubic diagonals
+# A sequence of voxels which starts with protein, followed by solvent and ending with protein is 
+# calleda protein-solvent-protein (PSP) event.
+# Step 5: Detect pockets as regions of voxels with a minimum number of PSP events (MIN_PSP)
+# Check nearest neighbors
 
 van_der_Waals_radii = {
     "C": 1.70,
@@ -68,7 +78,8 @@ def get_atoms_and_residues(pdb_file_path):
     return np.array(atoms_coords), atom_id_coords_dict, residues
     #return atom_id_coords_dict
 #print(get_atoms_and_residues("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb"))
-    
+
+# STEP 1    
 # The next step is to divide the 3D space (the bounding box in this case) into small cubes of x Angstrom per side
 def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
 
@@ -118,7 +129,7 @@ def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
 #     if distance <= van_der_Waals_radii[center]:
 #         return True
 
-
+# STEP 2
 def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
   
     box, voxel_grid = create_bounding_box_and_voxels(atom_coordinates, voxel_size)
@@ -165,6 +176,10 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
                             voxel_grid[(l,m,n)] = -1
     
     return voxel_grid
+
+# STEP 3
+def scan_along_x_y_z():
+    pass
 
 def run_complete_workflow(file_path):
     
