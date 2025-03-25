@@ -222,6 +222,35 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
             # Process this scanline to decide if there are PSP events
             mark_enclosed_voxels(scanline, index_map, voxel_grid)
              
+# STEP 4
+# Scan along the diagonals
+def scan_along_diagonals(atom_coordinates, voxel_grid, axis):
+    pass
+
+# STEP 5
+# Define pockets and cavities
+def define_pockets_and_cavities(voxel_grid, MIN_PSP = 2):
+    # Start by finding a voxel whose value is >= MIN_PSP
+    # Add to the region all nearest neighbors (how do we define this?) with values >= MIN_PSP
+    # Newly added nearest neighbors are again checked for nearest neighbors with values >= MIN_PSP
+    # Continue until all nearest neighbors with values >= MIN_PSP are added to the region
+    # Any voxels left with values >= MIN_PSP constitute one or more new pockets, and we start the process again for them
+
+    # return: a list of pockets? or a dictionary?
+    pass
+
+# STEP 6
+# Distinguish cavities
+# TODO: Is this necessary?
+def distinguish_cavities(voxel_grid, MIN_PSP = 2):
+
+    pass
+
+# STEP 7
+# Determine the surface of a pocket
+def determine_pocket_surface():
+    # input: the list/dictionary pockets from step 5
+    pass
 
 def run_complete_workflow(file_path):
     
