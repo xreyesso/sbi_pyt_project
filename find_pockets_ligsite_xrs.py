@@ -178,7 +178,9 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
     return voxel_grid
 
 # STEP 3
-def scan_along_x_y_z():
+# Find solvent-accessible voxels (value = 0) that are enclosed between inaccessible voxels (value = -1)
+# along straight lines
+def scan_along_x_y_z(voxel_grid):
     pass
 
 def run_complete_workflow(file_path):
@@ -188,7 +190,9 @@ def run_complete_workflow(file_path):
     # Create voxels
     box, voxel_grid = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
 
-
-    print(mark_occupied_voxels(atoms_ids_and_coordinates, file_path))
+    voxel_grid = mark_occupied_voxels(atoms_ids_and_coordinates, file_path)
+    print(voxel_grid)
+    
+    scan_along_x_y_z(voxel_grid)
 
 run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb")
