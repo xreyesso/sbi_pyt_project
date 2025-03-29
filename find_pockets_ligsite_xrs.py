@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import math
 from collections import defaultdict
+from collections import deque
 
 # Step 0: Read PDB file and get atom coordinates
 # Step 1: create 3D grid for the protein
@@ -189,9 +190,6 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
 # Find solvent-accessible voxels (value = 0) that are enclosed between inaccessible voxels (value = -1)
 # along straight lines
 # We are looking for runs of zeros that are enclosed on both sides by -1, only those get incremented by 1
-def mark_enclosed_voxels(scanline, index_map, voxel_grid):
-    pass
-
 def scan_along_axis(grid_dimensions, voxel_grid, axis):
     range_x, range_y, range_z = grid_dimensions
 
@@ -347,15 +345,63 @@ def scan_along_diagonal(grid_dimensions, voxel_grid, diagonal_vector):
 
 # STEP 5
 # Define pockets and cavities
-def define_pockets_and_cavities(voxel_grid, MIN_PSP = 2):
     # Start by finding a voxel whose value is >= MIN_PSP
     # Add to the region all nearest neighbors (how do we define this?) with values >= MIN_PSP
     # Newly added nearest neighbors are again checked for nearest neighbors with values >= MIN_PSP
     # Continue until all nearest neighbors with values >= MIN_PSP are added to the region
     # Any voxels left with values >= MIN_PSP constitute one or more new pockets, and we start the process again for them
-
     # return: a list of pockets? or a dictionary?
-    pass
+
+def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP=4):
+    visited = set()
+    pockets = []
+    range_x, range_y, range_z = grid_dimensions
+
+    # Find all grid points with values >= MIN_PSP
+    for i in range(range_x):
+        for j in range(range_y):
+            for k in range(range_z):
+                voxel = (i, j, k)
+                
+                # Skip if already visited or below threshold or occupied by protein
+                if voxel in visited or voxel_grid.get(voxel, 0) < MIN_PSP:
+                    continue
+                
+                # Start a new pocket
+                pocket = []
+                queue = deque([voxel])
+                visited.add(voxel)
+                
+                # Region growing process
+                while queue:
+                    current = queue.popleft()
+                    pocket.append(current)
+                    
+                    # Check 26-connected neighbors (full neighborhood)
+                    for di in (-1, 0, 1):
+                        for dj in (-1, 0, 1):
+                            for dk in (-1, 0, 1):
+                                if di == 0 and dj == 0 and dk == 0:
+                                    continue
+                                
+                                neighbor = (current[0]+di, current[1]+dj, current[2]+dk)
+                                
+                                if (neighbor not in visited and 
+                                    0 <= neighbor[0] < range_x and 
+                                    0 <= neighbor[1] < range_y and 
+                                    0 <= neighbor[2] < range_z and
+                                    voxel_grid.get(neighbor, 0) >= MIN_PSP and
+                                    voxel_grid.get(neighbor, 0) != -1):
+                                    
+                                    visited.add(neighbor)
+                                    queue.append(neighbor)
+                
+                # Add the completed pocket
+                if pocket:
+                    pockets.append(pocket)
+    
+    # Sort pockets by size (largest first)
+    return sorted(pockets, key=len, reverse=True)
 
 # STEP 6
 # Distinguish cavities
@@ -366,14 +412,16 @@ def distinguish_cavities(voxel_grid, MIN_PSP = 2):
 
 # STEP 7
 # Determine the surface of a pocket
-def determine_pocket_surface():
+def determine_pocket_surface(voxel_indices):
     # input: the list/dictionary pockets from step 5
-    pass
+    (i,j,k) = voxel_indices
+    nearest_neighbors = [(i+1,j,k), (i-1,j,k), (i,j+1,k), (i,j-1,k), (i,j,k+1), (i,j,k-1)]
+   
 
-# STEP 8
-# Identify the aminoacids and atoms that surround the surface of a pocket
+    
 
-# STEP 9
+    
+
 # Prepare output and display, for example create a PDB-like file
 # Prepare a file that can be read by PyMol
 
@@ -394,5 +442,8 @@ def run_complete_workflow(file_path):
     for diag in diagonals:
         voxel_grid = scan_along_diagonal(grid_dimensions, voxel_grid, diag)
 
-    print(voxel_grid)
-run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb")
+    print(file_path)
+    print(define_pockets_and_cavities(voxel_grid, grid_dimensions))
+    print(len(define_pockets_and_cavities(voxel_grid, grid_dimensions)))
+
+run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
