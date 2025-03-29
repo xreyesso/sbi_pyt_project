@@ -192,8 +192,8 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
 def mark_enclosed_voxels(scanline, index_map, voxel_grid):
     pass
 
-def scan_along_axis(atom_coordinates, voxel_grid, axis):
-    _, _, (range_x, range_y, range_z) = create_bounding_box_and_voxels(atom_coordinates)
+def scan_along_axis(grid_dimensions, voxel_grid, axis):
+    range_x, range_y, range_z = grid_dimensions
 
     if axis == 'x':
         scan_range = range(range_x)
@@ -236,13 +236,13 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
                 
 # STEP 4
 # Scan along the diagonals
-def scan_along_diagonal(atom_coordinates, voxel_grid, diagonal_vector):
+def scan_along_diagonal(grid_dimensions, voxel_grid, diagonal_vector):
     """
     Scan along a diagonal direction specified by diagonal_vector.
     diagonal_vector should be one of:
     (1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1)
     """
-    _, _, (range_x, range_y, range_z) = create_bounding_box_and_voxels(atom_coordinates)
+    range_x, range_y, range_z = grid_dimensions
     
     # Unpack diagonal direction
     dx, dy, dz = diagonal_vector
@@ -382,17 +382,17 @@ def run_complete_workflow(file_path):
     atoms_ids_and_coordinates = atoms_coordinates_dict(file_path)
 
     # Create voxels
-    _, voxel_grid, _ = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
+    _, voxel_grid, grid_dimensions = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
 
     voxel_grid = mark_occupied_voxels(atoms_ids_and_coordinates, file_path)
 
     axes = ['x','y','z']
     for axis in axes:
-        voxel_grid = scan_along_axis(atoms_ids_and_coordinates, voxel_grid, axis)
+        voxel_grid = scan_along_axis(grid_dimensions, voxel_grid, axis)
 
     diagonals = [(1,1,1), (1,1,-1), (1,-1,1), (1,-1,-1)]
     for diag in diagonals:
-        voxel_grid = scan_along_diagonal(atoms_ids_and_coordinates, voxel_grid, diag)
+        voxel_grid = scan_along_diagonal(grid_dimensions, voxel_grid, diag)
 
     print(voxel_grid)
 run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb")
