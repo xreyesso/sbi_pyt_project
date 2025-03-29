@@ -140,7 +140,7 @@ def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 1.0):
 # STEP 2
 def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 1.0):
   
-    box, voxel_grid = create_bounding_box_and_voxels(atom_coordinates, voxel_size)
+    box, voxel_grid, _ = create_bounding_box_and_voxels(atom_coordinates, voxel_size)
 
     xmin = box["X"][0]
     ymin = box["Y"][0]
@@ -206,7 +206,7 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
     elif axis == 'z':
         dim1_range = range(range_x)
         dim2_range = range(range_y)
-        scan_range = range(range_y)
+        scan_range = range(range_z)
     else:
         raise ValueError("Axis must be 'x', 'y' or 'z'")
 
@@ -214,7 +214,6 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
     for i in dim1_range:
         for j in dim2_range: # for all lines parallel to the indicated axis
             solvent_voxels = None
-            occupied_voxel = False
 
             for s in scan_range:
                 if axis == 'x':
@@ -225,14 +224,15 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
                     key = (i, j, s)
 
                 if voxel_grid[key] == -1:
-                    occupied_voxel = True
                     if solvent_voxels is not None:
                         for key2 in solvent_voxels:
                             voxel_grid[key2] += 1 # Add 1 for the solvent voxels in between protein voxels
                     solvent_voxels = [] # Reset the solvent voxels list so we do not process them multiple times
                 else:
-                    if occupied_voxel:
+                    if solvent_voxels is not None:
                         solvent_voxels.append(key) # Only keep track of solvent voxels if they come after a protein (occupied) voxel
+    
+    return(voxel_grid)
                 
              
 # STEP 4
@@ -277,11 +277,13 @@ def run_complete_workflow(file_path):
     atoms_ids_and_coordinates = atoms_coordinates_dict(file_path)
 
     # Create voxels
-    box, voxel_grid = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
+    _, voxel_grid, _ = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
 
     voxel_grid = mark_occupied_voxels(atoms_ids_and_coordinates, file_path)
+
+    axes = ['x','y','z']
+    for axis in axes:
+        scan_along_axis(atoms_ids_and_coordinates, voxel_grid, axis)
+
     print(voxel_grid)
-
-    scan_along_axis(voxel_grid)
-
 run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb")
