@@ -234,11 +234,116 @@ def scan_along_axis(atom_coordinates, voxel_grid, axis):
     
     return(voxel_grid)
                 
-             
 # STEP 4
 # Scan along the diagonals
-def scan_along_diagonals(atom_coordinates, voxel_grid, axis):
-    pass
+def scan_along_diagonal(atom_coordinates, voxel_grid, diagonal_vector):
+    """
+    Scan along a diagonal direction specified by diagonal_vector.
+    diagonal_vector should be one of:
+    (1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1)
+    """
+    _, _, (range_x, range_y, range_z) = create_bounding_box_and_voxels(atom_coordinates)
+    
+    # Unpack diagonal direction
+    dx, dy, dz = diagonal_vector
+    
+    # Determine starting points based on the direction
+    # We need to consider all possible starting points for the diagonal
+    if dx > 0:
+        x_starts = range(range_x)
+    else:
+        x_starts = range(range_x - 1, -1, -1) # Start from the end
+    if dy > 0:
+        y_starts = range(range_y)
+    else:
+        y_starts = range(range_y - 1, -1, -1) # Start from the end
+    if dz > 0:
+        z_starts = range(range_z)
+    else:
+        z_starts = range(range_z - 1, -1, -1) # Start from the end
+
+    # Plane (x,y) scan
+    for start_x in x_starts:
+        for start_y in y_starts:
+            # Start a diagonal trace from this point
+            x, y, z = start_x, start_y, 0
+            solvent_voxels = None
+            occupied_voxel = False
+            
+            # Follow the diagonal until we go out of bounds
+            while 0 <= x < range_x and 0 <= y < range_y and 0 <= z < range_z:
+                key = (x, y, z)
+                
+                if voxel_grid[key] == -1:  # Protein voxel
+                    occupied_voxel = True
+                    if solvent_voxels is not None:
+                        for key2 in solvent_voxels:
+                            voxel_grid[key2] += 1  # Increment solvent voxels between protein voxels
+                    solvent_voxels = []  # Reset for next potential cavity
+                else:  # Solvent voxel
+                    if occupied_voxel:
+                        solvent_voxels.append(key)
+                
+                # Move along the diagonal
+                x += dx
+                y += dy
+                z += dz
+
+    # Repeat the process for all z-starting positions
+    for start_x in x_starts:
+        for start_z in z_starts:
+            # Start a diagonal trace from this point
+            x, y, z = start_x, 0, start_z
+            solvent_voxels = None
+            occupied_voxel = False
+            
+            # Follow the diagonal until we go out of bounds
+            while 0 <= x < range_x and 0 <= y < range_y and 0 <= z < range_z:
+                key = (x, y, z)
+                
+                if voxel_grid.get(key, 0) == -1:  # Protein voxel
+                    occupied_voxel = True
+                    if solvent_voxels is not None:
+                        for key2 in solvent_voxels:
+                            voxel_grid[key2] += 1  # Increment solvent voxels between protein voxels
+                    solvent_voxels = []  # Reset for next potential cavity
+                else:  # Solvent voxel
+                    if occupied_voxel:
+                        solvent_voxels.append(key)
+                
+                # Move along the diagonal
+                x += dx
+                y += dy
+                z += dz
+
+    # Repeat the process for all y-starting positions
+    for start_y in y_starts:
+        for start_z in z_starts:
+            # Start a diagonal trace from this point
+            x, y, z = 0, start_y, start_z
+            solvent_voxels = None
+            occupied_voxel = False
+            
+            # Follow the diagonal until we go out of bounds
+            while 0 <= x < range_x and 0 <= y < range_y and 0 <= z < range_z:
+                key = (x, y, z)
+                
+                if voxel_grid.get(key, 0) == -1:  # Protein voxel
+                    occupied_voxel = True
+                    if solvent_voxels is not None:
+                        for key2 in solvent_voxels:
+                            voxel_grid[key2] += 1  # Increment solvent voxels between protein voxels
+                    solvent_voxels = []  # Reset for next potential cavity
+                else:  # Solvent voxel
+                    if occupied_voxel:
+                        solvent_voxels.append(key)
+                
+                # Move along the diagonal
+                x += dx
+                y += dy
+                z += dz
+
+    return(voxel_grid)
 
 # STEP 5
 # Define pockets and cavities
@@ -283,7 +388,11 @@ def run_complete_workflow(file_path):
 
     axes = ['x','y','z']
     for axis in axes:
-        scan_along_axis(atoms_ids_and_coordinates, voxel_grid, axis)
+        voxel_grid = scan_along_axis(atoms_ids_and_coordinates, voxel_grid, axis)
+
+    diagonals = [(1,1,1), (1,1,-1), (1,-1,1), (1,-1,-1)]
+    for diag in diagonals:
+        voxel_grid = scan_along_diagonal(atoms_ids_and_coordinates, voxel_grid, diag)
 
     print(voxel_grid)
 run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb")
