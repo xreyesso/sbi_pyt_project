@@ -444,15 +444,9 @@ def determine_pocket_surface(voxel_grid, pockets):
     
     # Optional: include diagonal neighbors for a more detailed surface
     # This would include 20 additional neighbors (12 edge-adjacent + 8 vertex-adjacent)
-    
-    # Dictionary to store voxels belonging to the pocket surface
-    pocket_surface_voxels = []
-    
+
     # Process each pocket
     for id, voxels in pockets_dict.items():
-        #pocket_surface_voxels[pocket] = []
-        surface_neighbors = {}
-        
         
         # Check each voxel in the pocket
         for voxel in voxels:
@@ -480,16 +474,13 @@ def determine_pocket_surface(voxel_grid, pockets):
                 pockets_surface_dict[f'surface_{id}'].append(voxel)
                 #surface_neighbors[voxel] = neighbor_coords
 
-        # Store the voxels that form the pocket surface
-        #pocket_surface_voxels[pocket]=surface_neighbors
-        #pocket_surface_voxels.append(surface_neighbors)
     print(pockets_surface_dict)
        
     return pockets_surface_dict
 
 
 
-def visualize_pockets(pdb_file_path, pockets, voxel_grid, atom_id_coords_dict, voxel_size=0.5, box=None, output_file=None):
+def visualize_pockets(pdb_file_path, pocket_surface, voxel_grid, atom_id_coords_dict, voxel_size=0.5, box=None, output_file=None):
     """
     Visualize protein structure and detected pockets in 3D.
     
@@ -510,6 +501,11 @@ def visualize_pockets(pdb_file_path, pockets, voxel_grid, atom_id_coords_dict, v
     output_file : str, optional
         Path to save the visualization (if None, display instead)
     """
+    # Convert back the pocket_surface dictionary to a list of lists to use visualization without further major changes
+    pockets = []
+    for pocket_surface in pocket_surface.values():
+        pockets.append(pocket_surface)
+
     # Extract atom coordinates
     atom_coords = np.array(list(atom_id_coords_dict.values()))
     
