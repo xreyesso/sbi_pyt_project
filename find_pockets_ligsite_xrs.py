@@ -1,7 +1,6 @@
 import numpy as np
 import sys
 import math
-from collections import defaultdict
 from collections import deque
 
 # Step 0: Read PDB file and get atom coordinates
@@ -351,8 +350,7 @@ def scan_along_diagonal(grid_dimensions, voxel_grid, diagonal_vector):
     # Continue until all nearest neighbors with values >= MIN_PSP are added to the region
     # Any voxels left with values >= MIN_PSP constitute one or more new pockets, and we start the process again for them
     # return: a list of pockets? or a dictionary?
-
-def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP=4):
+def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP=2):
     visited = set()
     pockets = []
     range_x, range_y, range_z = grid_dimensions
@@ -403,6 +401,9 @@ def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP=4):
     # Sort pockets by size (largest first)
     return sorted(pockets, key=len, reverse=True)
 
+def filter_pockets_by_size(pockets, min_voxel_count=30):
+    return [pocket for pocket in pockets if len(pocket) >= min_voxel_count]
+
 # STEP 6
 # Distinguish cavities
 # TODO: Is this necessary?
@@ -417,11 +418,6 @@ def determine_pocket_surface(voxel_indices):
     (i,j,k) = voxel_indices
     nearest_neighbors = [(i+1,j,k), (i-1,j,k), (i,j+1,k), (i,j-1,k), (i,j,k+1), (i,j,k-1)]
    
-
-    
-
-    
-
 # Prepare output and display, for example create a PDB-like file
 # Prepare a file that can be read by PyMol
 
@@ -443,7 +439,11 @@ def run_complete_workflow(file_path):
         voxel_grid = scan_along_diagonal(grid_dimensions, voxel_grid, diag)
 
     print(file_path)
-    print(define_pockets_and_cavities(voxel_grid, grid_dimensions))
-    print(len(define_pockets_and_cavities(voxel_grid, grid_dimensions)))
+    pockets1  = define_pockets_and_cavities(voxel_grid, grid_dimensions)
+    print(len(pockets1))
+
+    pockets2 = filter_pockets_by_size(pockets1)
+    print(pockets2)
+    print(len(pockets2))
 
 run_complete_workflow("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1a6u.pdb")
