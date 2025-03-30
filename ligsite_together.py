@@ -193,9 +193,6 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 0.5):
 # Find solvent-accessible voxels (value = 0) that are enclosed between inaccessible voxels (value = -1)
 # along straight lines
 # We are looking for runs of zeros that are enclosed on both sides by -1, only those get incremented by 1
-def mark_enclosed_voxels(scanline, index_map, voxel_grid):
-    pass
-
 def scan_along_axis(voxel_grid, grid_dimensions, axis):
     range_x, range_y, range_z = grid_dimensions
 
@@ -352,6 +349,7 @@ def scan_along_diagonal(grid_dimensions, voxel_grid, diagonal_vector):
 
 # STEP 5 
 # Define pockets and cavities
+# pockets is a list of lists
 def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP=3):
     visited = set()
     pockets = []
@@ -429,6 +427,14 @@ def determine_pocket_surface(voxel_grid, pockets):
         Dictionary mapping pocket ID to a dictionary of surface points
         Each surface point maps to a list of its neighboring surface points
     """
+    
+    # Turn the pockets (list of lists) into a dictionary
+    pockets_dict = {}
+    for i, pocket in enumerate(pockets):
+        pockets_dict[f'pocket_{i+1}'] = pocket
+    
+    pockets_surface_dict = defaultdict(list)
+
     # Define the 6 nearest neighbors in 3D grid (face-adjacent)
     nearest_neighbors = [
         (1, 0, 0), (-1, 0, 0),  # x-axis neighbors
@@ -439,16 +445,18 @@ def determine_pocket_surface(voxel_grid, pockets):
     # Optional: include diagonal neighbors for a more detailed surface
     # This would include 20 additional neighbors (12 edge-adjacent + 8 vertex-adjacent)
     
-    # Dictionary to store pocket surfaces
-    pocket_surfaces = {}
+    # Dictionary to store voxels belonging to the pocket surface
+    pocket_surface_voxels = []
     
     # Process each pocket
-    for pocket in pockets:
-        surface_points = {}
+    for id, voxels in pockets_dict.items():
+        #pocket_surface_voxels[pocket] = []
+        surface_neighbors = {}
+        
         
         # Check each voxel in the pocket
-        for voxel in pocket:
-            i, j, k = voxel
+        for voxel in voxels:
+            i, j, k = voxel # Retrieve the indices of the voxel
             
             # Check if this voxel is a surface point
             is_surface = False
@@ -469,12 +477,15 @@ def determine_pocket_surface(voxel_grid, pockets):
             
             # If this is a surface point, add it to our collection
             if is_surface:
-                surface_points[voxel] = neighbor_coords
-        
-        # Store the surface for this pocket
-        pocket_surfaces.append(surface_points)
-    
-    return pocket_surfaces
+                pockets_surface_dict[f'surface_{id}'].append(voxel)
+                #surface_neighbors[voxel] = neighbor_coords
+
+        # Store the voxels that form the pocket surface
+        #pocket_surface_voxels[pocket]=surface_neighbors
+        #pocket_surface_voxels.append(surface_neighbors)
+    print(pockets_surface_dict)
+       
+    return pockets_surface_dict
 
 
 
@@ -799,12 +810,14 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     
     pockets = filter_pockets_by_size(pockets)
     print(f"Found {len(pockets)} filtered potential binding sites.")
-    
+    print(pockets)
+    pocket_surface = determine_pocket_surface(voxel_grid, pockets)
+    print(pocket_surface)
     # After detecting pockets
-    visualize_pockets("1a6u.pdb", pockets, voxel_grid, atom_id_coords_dict, box=box)
+    visualize_pockets(file_path, pocket_surface, voxel_grid, atom_id_coords_dict, box=box)
 
 
-    print(f"Step 6: Determining pocket surfaces...")
+    #print(f"Step 6: Determining pocket surfaces...")
     '''
     # Determine pocket surfaces
     pocket_surfaces = {}
@@ -823,12 +836,12 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
         
         print(f"  Pocket {i+1}: {len(surrounding_residues)} surrounding residues")
     '''
-    print(f"Step 8: Generating output files...")
+    #print(f"Step 8: Generating output files...")
     
 
     # Generate predicted pockets PDB file
-    pockets_pdb_file = os.path.join(output_dir, "predicted_pockets.pdb")
-    generate_pockets_pdb(pockets, voxel_grid, box, voxel_size, pockets_pdb_file)
+    #pockets_pdb_file = os.path.join(output_dir, "predicted_pockets.pdb")
+    #generate_pockets_pdb(pockets, voxel_grid, box, voxel_size, pockets_pdb_file)
     '''
     # Generate residue files for each pocket
     for i, surrounding_residues in pocket_residues.items():
