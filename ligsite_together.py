@@ -454,7 +454,6 @@ def determine_pocket_surface(voxel_grid, pockets):
             
             # Check if this voxel is a surface point
             is_surface = False
-            neighbor_coords = []
             
             for di, dj, dk in nearest_neighbors:
                 neighbor = (i + di, j + dj, k + dk)
@@ -462,12 +461,6 @@ def determine_pocket_surface(voxel_grid, pockets):
                 # If neighbor is a protein voxel, this is a surface point
                 if neighbor in voxel_grid and voxel_grid[neighbor] == -1:
                     is_surface = True
-                
-                # Store neighboring surface points (for visualization)
-                #if (neighbor in pocket and 
-                #    any(voxel_grid.get((neighbor[0] + di, neighbor[1] + dj, neighbor[2] + dk), 0) == -1 
-                #        for di, dj, dk in nearest_neighbors)):
-                #    neighbor_coords.append(neighbor)
             
             # If this is a surface point, add it to our collection
             if is_surface:
@@ -478,6 +471,49 @@ def determine_pocket_surface(voxel_grid, pockets):
        
     return pockets_surface_dict
 
+# DETERMINE ATOMS FOR EACH POCKET SURFACE
+def find_atoms_for_pocket_surface(pockets_surface_dict, box, voxel_size=0.5):
+    pockets_atoms_dict = {}
+
+    xmin = box["X"][0]
+    ymin = box["Y"][0]
+    zmin = box["Z"][0]
+
+    # Create a dictionary, keys: pockets, values: voxels in cartesian coordinates
+    for id, voxels in pockets_surface_dict.items():
+        coords = []
+        for voxel in voxels:
+            i, j, k = voxel # These are the voxel indices
+            # Convert voxel index to Cartesian coordinate 
+            x = xmin + i*voxel_size
+            y = ymin + j*voxel_size
+            z = zmin + k*voxel_size
+
+            coords.append((x,y,z))
+        
+        # Store in dict
+        # try as well:pocket_id.replace("surface_", "")
+        pockets_atoms_dict[f'{id[7:]}'] = coords
+
+    # Do we want to create a bounding box around each pocket? Now it should be doable since
+    # we have the cartesian coordinates of the voxels and we can compute the dimensions of the box
+    # How to make this box axis-aligned?
+    # Once we have this box, prefilter atoms within this box
+    # Use KDTree distance method to filter atoms
+    # dictionary {'pocket_1: [(id, atom_name, (coorx, coordy, coordz), residue_id),
+    # (id, atom_name, (coorx, coordy, coordz), residue_id), 
+    # (id, atom_name, (coorx, coordy, coordz), residue_id),
+    # (id, atom_name, (coorx, coordy, coordz), residue_id)]
+    # 'pocket_2: [(id, atom_name, (coorx, coordy, coordz), residue_id),...],
+    # 'pocket_3: [(id, atom_name, (coorx, coordy, coordz), residue_id),...]
+    #}
+    # Then loop in all tuples for each pockets, create a set called residues and add residue_id's to this set
+    #{'pocket_1: [(residue_id1,residue_id2,residue_id3,... ),
+    # 'pocket_2: [(residue_id1,...)],
+    # 'pocket_3: [(residue_id2,...)]
+    #}
+    print(pockets_atoms_dict)
+    return pockets_atoms_dict 
 
 
 def visualize_pockets(pdb_file_path, pocket_surface, voxel_grid, atom_id_coords_dict, voxel_size=0.5, box=None, output_file=None):
@@ -809,6 +845,9 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     print(pockets)
     pocket_surface = determine_pocket_surface(voxel_grid, pockets)
     print(pocket_surface)
+
+    find_atoms_for_pocket_surface(pocket_surface, box)
+
     # After detecting pockets
     visualize_pockets(file_path, pocket_surface, voxel_grid, atom_id_coords_dict, box=box)
 
