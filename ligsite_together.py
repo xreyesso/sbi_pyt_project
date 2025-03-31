@@ -63,33 +63,37 @@ def PDB_iterator(pdb_file_path=None):
 
 def atoms_coordinates_dict(file_path):
     atom_id_coords_dict = {}
-    for atom_id, _, _, _, _, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
+    residue_info_dict = {}
+    
+    for atom_id, atom_name, residue_name, chain_ID, residue_ID, x_coordinate, y_coordinate, z_coordinate in PDB_iterator(file_path):
+        # Store atom coordinates
         atom_id_coords_dict[atom_id] = (x_coordinate, y_coordinate, z_coordinate)
-    return atom_id_coords_dict
-#print(atoms_coordinates_dict("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb"))
-
-def get_atoms_and_residues(pdb_file_path):
-    """Extract atoms and residues from PDB file."""
-    atoms_coords = []
-    atom_id_coords_dict = {}
-    residues = {}
-    
-    for atom_id, atom_name, residue_name, chain_ID, residue_ID, x, y, z in PDB_iterator(pdb_file_path):
-        atom_id_coords_dict[atom_id] = (x, y, z)
-        atoms_coords.append((x, y, z))
         
-        # Store residue information
+        # Determine the element type from atom name (first character usually)
+        element = atom_name[0]
+        
+        # Create unique residue key (chain_ID, residue_ID)
         residue_key = (chain_ID, residue_ID)
-        if residue_key not in residues:
-            residues[residue_key] = {
+        
+        # Initialize residue entry if it doesn't exist
+        if residue_key not in residue_info_dict:
+            residue_info_dict[residue_key] = {
+                'id': residue_ID,
                 'name': residue_name,
-                'atoms': []
+                'chain': chain_ID,
+                'atoms': [],
+                'atom_coords': [],
+                'elements': [],
+                'atom_ids': []
             }
-        residues[residue_key]['atoms'].append((atom_id, atom_name, (x, y, z)))
+        
+        # Add atom information to the residue
+        residue_info_dict[residue_key]['atoms'].append(atom_name)
+        residue_info_dict[residue_key]['atom_coords'].append((x_coordinate, y_coordinate, z_coordinate))
+        residue_info_dict[residue_key]['elements'].append(element)
+        residue_info_dict[residue_key]['atom_ids'].append(atom_id)
     
-    return np.array(atoms_coords), atom_id_coords_dict, residues
-    #return atom_id_coords_dict
-#print(get_atoms_and_residues("/home/xrs/projects-ubuntu/git_python/sbi_pyt_project/1mh1.pdb"))
+    return atom_id_coords_dict, residue_info_dict
 
 # STEP 1    
 # The next step is to divide the 3D space (the bounding box in this case) into small cubes of x Angstrom per side
@@ -375,24 +379,20 @@ def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP=3):
                     current = queue.popleft()
                     pocket.append(current)
                     
-                    # Check 26-connected neighbors (full neighborhood)
-                    for di in (-1, 0, 1):
-                        for dj in (-1, 0, 1):
-                            for dk in (-1, 0, 1):
-                                if di == 0 and dj == 0 and dk == 0:
-                                    continue
-                                
-                                neighbor = (current[0]+di, current[1]+dj, current[2]+dk)
-                                
-                                if (neighbor not in visited and 
-                                    0 <= neighbor[0] < range_x and 
-                                    0 <= neighbor[1] < range_y and 
-                                    0 <= neighbor[2] < range_z and
-                                    voxel_grid.get(neighbor, 0) >= MIN_PSP and
-                                    voxel_grid.get(neighbor, 0) != -1):
-                                    
-                                    visited.add(neighbor)
-                                    queue.append(neighbor)
+                    # Check 6-connected neighbors (full neighborhood)
+                    for direction in [(0,0,1), (0,0,-1), (0,1,0), (0,-1,0), (1,0,0), (-1,0,0)]:
+                        di, dj, dk = direction
+                        neighbor = (current[0]+di, current[1]+dj, current[2]+dk)
+                        
+                        if (neighbor not in visited and 
+                            0 <= neighbor[0] < range_x and 
+                            0 <= neighbor[1] < range_y and 
+                            0 <= neighbor[2] < range_z and
+                            voxel_grid.get(neighbor, 0) >= MIN_PSP and
+                            voxel_grid.get(neighbor, 0) != -1):
+                            
+                            visited.add(neighbor)
+                            queue.append(neighbor)  
                 
                 # Add the completed pocket
                 if pocket:
@@ -402,37 +402,18 @@ def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP=3):
     return sorted(pockets, key=len, reverse=True)
 
 def filter_pockets_by_size(pockets, min_voxel_count=30):
-    return [pocket for pocket in pockets if len(pocket) >= min_voxel_count]
+    pockets_dict = {}
+    n = 1
+    for pocket in pockets:
+        if len(pocket) >= min_voxel_count:
+            pockets_dict[f'pocket_{n}'] = pocket
+            n +=1
+    return pockets_dict
 
 # STEP 6
 # Determine the surface of a pocket
-def determine_pocket_surface(voxel_grid, pockets):
-    """
-    Determine the surface of each pocket.
-    
-    Surface points are grid points that:
-    1. Belong to a pocket (value >= MIN_PSP)
-    2. Have at least one neighboring voxel that is occupied by protein (value = -1)
-    
-    Parameters:
-    -----------
-    voxel_grid : dict
-        Dictionary mapping (i,j,k) coordinates to voxel values
-    pockets : dict or list
-        Collection of pockets identified in Step 5
-        
-    Returns:
-    --------
-    dict
-        Dictionary mapping pocket ID to a dictionary of surface points
-        Each surface point maps to a list of its neighboring surface points
-    """
-    
-    # Turn the pockets (list of lists) into a dictionary
-    pockets_dict = {}
-    for i, pocket in enumerate(pockets):
-        pockets_dict[f'pocket_{i+1}'] = pocket
-    
+def determine_pocket_surface(voxel_grid, pockets_dict):
+
     pockets_surface_dict = defaultdict(list)
 
     # Define the 6 nearest neighbors in 3D grid (face-adjacent)
@@ -512,9 +493,69 @@ def find_atoms_for_pocket_surface(pockets_surface_dict, box, voxel_size=0.5):
     # 'pocket_2: [(residue_id1,...)],
     # 'pocket_3: [(residue_id2,...)]
     #}
-    print(pockets_atoms_dict)
+    #print(pockets_atoms_dict)
     return pockets_atoms_dict 
 
+
+def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_coords_dict, bounding_box, voxel_size=0.5):
+    
+    # Get the minimum coordinates of the bounding box
+    xmin = bounding_box["X"][0]
+    ymin = bounding_box["Y"][0]
+    zmin = bounding_box["Z"][0]
+    
+    # Define the distance threshold for considering an atom as surrounding a pocket
+    # Usually slightly larger than the sum of probe radius and voxel size
+    distance_threshold = probe_radius + voxel_size + 0.5
+    
+    pocket_surroundings = {}
+    
+    # Process each pocket
+    for pocket_id, surface_points in pocket_surfaces.items():
+        surrounding_residues = {}
+        surrounding_atoms = {}
+        
+        # Check each surface point
+        for surface_voxel in surface_points:
+            # Convert voxel indices to cartesian coordinates (using the center of the voxel)
+            i, j, k = surface_voxel
+            voxel_x = xmin + i*voxel_size + voxel_size/2
+            voxel_y = ymin + j*voxel_size + voxel_size/2
+            voxel_z = zmin + k*voxel_size + voxel_size/2
+            voxel_center = np.array([voxel_x, voxel_y, voxel_z])
+            
+            # Check all atoms to find those close to this surface point
+            for atom_id, coords in atom_id_coords_dict.items():
+                atom_coords = np.array(coords)
+                distance = np.linalg.norm(voxel_center - atom_coords)
+                
+                # If the atom is within the threshold distance, consider it surrounding
+                if distance <= distance_threshold:
+                    surrounding_atoms[atom_id] = coords
+                    
+                    # Find which residue this atom belongs to
+                    for residue_key, residue_info in residues.items():
+                        for id in residue_info['atom_ids']:
+                            if id == atom_id:
+                                # Add this residue to our collection
+                                if residue_key not in surrounding_residues:
+                                    surrounding_residues[residue_key] = {
+                                        'name': residue_info['name'],
+                                        'atoms': []
+                                    }
+                                
+                                # Add the atom to this residue (if not already there)
+                                if atom_id not in [a[0] for a in surrounding_residues[residue_key]['atoms']]:
+                                    surrounding_residues[residue_key]['atoms'].append(id)
+                                break
+        
+        # Add the results for this pocket
+        pocket_surroundings[pocket_id]={
+            'residues': surrounding_residues,
+            'atoms': surrounding_atoms
+        }
+    print(pocket_surroundings)
+    return pocket_surroundings
 
 def visualize_pockets(pdb_file_path, pocket_surface, voxel_grid, atom_id_coords_dict, voxel_size=0.5, box=None, output_file=None):
     """
@@ -806,10 +847,7 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     
     print(f"Processing PDB file: {file_path}")
     print(f"Step 1: Getting atom coordinates and residue information...")
-    atoms_ids_and_coordinates = atoms_coordinates_dict(file_path)
-
-    # Get atoms and residues information
-    atoms_coords, atom_id_coords_dict, residues = get_atoms_and_residues(file_path)
+    atoms_ids_and_coordinates, residues_info_dict = atoms_coordinates_dict(file_path)
     
     print(f"Step 2: Creating grid and marking occupied voxels...")
     
@@ -842,14 +880,17 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     
     pockets = filter_pockets_by_size(pockets)
     print(f"Found {len(pockets)} filtered potential binding sites.")
-    print(pockets)
+    #print(pockets)
     pocket_surface = determine_pocket_surface(voxel_grid, pockets)
-    print(pocket_surface)
+    #print(pocket_surface)
 
     find_atoms_for_pocket_surface(pocket_surface, box)
 
+    identify_surrounding_residues_and_atoms(pocket_surface, residues_info_dict, atoms_ids_and_coordinates, box)
+
     # After detecting pockets
-    visualize_pockets(file_path, pocket_surface, voxel_grid, atom_id_coords_dict, box=box)
+    visualize_pockets(file_path, pocket_surface, voxel_grid, atoms_ids_and_coordinates, box=box)
+
 
 
     #print(f"Step 6: Determining pocket surfaces...")
