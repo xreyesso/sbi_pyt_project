@@ -494,7 +494,7 @@ def find_atoms_for_pocket_surface(pockets_surface_dict, box, voxel_size=0.5):
     #print(pockets_atoms_dict)
     return pockets_atoms_dict 
 
-
+# STEP 7
 def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_coords_dict, bounding_box, voxel_size=0.5):
     
     # Get the minimum coordinates of the bounding box
@@ -512,7 +512,7 @@ def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_c
     for pocket_id, surface_points in pocket_surfaces.items():
         surrounding_residues = {}
         surrounding_atoms = {}
-        
+
         # Check each surface point
         for surface_voxel in surface_points:
             # Convert voxel indices to cartesian coordinates (using the center of the voxel)
@@ -521,12 +521,12 @@ def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_c
             voxel_y = ymin + j*voxel_size + voxel_size/2
             voxel_z = zmin + k*voxel_size + voxel_size/2
             voxel_center = np.array([voxel_x, voxel_y, voxel_z])
-            
+        
             # Check all atoms to find those close to this surface point
             for atom_id, coords in atom_id_coords_dict.items():
                 atom_coords = np.array(coords)
                 distance = np.linalg.norm(voxel_center - atom_coords)
-                
+
                 # If the atom is within the threshold distance, consider it surrounding
                 if distance <= distance_threshold:
                     surrounding_atoms[atom_id] = coords
@@ -669,11 +669,7 @@ def visualize_pockets(pdb_file_path, pocket_surface, voxel_grid, atom_id_coords_
 
 
 # STEP 8
-# Identify the aminoacids and atoms that surround the surface of a pocket
 
-
-# STEP 9
-# Prepare output and display
 def calculate_pocket_properties(pocket, voxel_grid, bounding_box, voxel_size):
     # Important: to compute the volumen of the pocket, use the pocket filled (before getting the surface grid points)
     xmin = bounding_box["X"][0]
@@ -711,6 +707,9 @@ def calculate_pocket_properties(pocket, voxel_grid, bounding_box, voxel_size):
         'centroid': centroid,
         'score': avg_score
     }
+
+# STEP 9
+
 
 # Generate PDB file for predicted pockets
 def generate_pockets_pdb(pockets, voxel_grid, bounding_box, voxel_size, output_file):
