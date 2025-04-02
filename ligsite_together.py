@@ -447,8 +447,6 @@ def determine_pocket_surface(voxel_grid, pockets_dict):
             if is_surface:
                 pockets_surface_dict[f'surface_{id}'].append(voxel)
                 #surface_neighbors[voxel] = neighbor_coords
-
-    print(pockets_surface_dict)
        
     return pockets_surface_dict
 
@@ -506,7 +504,7 @@ def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_c
     
     # Define the distance threshold for considering an atom as surrounding a pocket
     # Usually slightly larger than the sum of probe radius and voxel size
-    distance_threshold = probe_radius + voxel_size + 0.5
+    distance_threshold = probe_radius + 1.7
     
     pocket_surroundings = {}
     
@@ -545,7 +543,7 @@ def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_c
                                     }
                                 
                                 # Add the atom to this residue (if not already there)
-                                if atom_id not in [a[0] for a in surrounding_residues[residue_key]['atoms']]:
+                                if atom_id not in [a for a in surrounding_residues[residue_key]['atoms']]:
                                     surrounding_residues[residue_key]['atoms'].append(id)
                                 break
         
@@ -677,14 +675,12 @@ def visualize_pockets(pdb_file_path, pocket_surface, voxel_grid, atom_id_coords_
 # STEP 9
 # Prepare output and display
 def calculate_pocket_properties(pocket, voxel_grid, bounding_box, voxel_size):
-    """
-    Calculate properties of a pocket such as volume, surface area, score, and centroid
-    """
+    # Important: to compute the volumen of the pocket, use the pocket filled (before getting the surface grid points)
     xmin = bounding_box["X"][0]
     ymin = bounding_box["Y"][0]
     zmin = bounding_box["Z"][0]
     
-    # Volume is simply the number of voxels times the voxel volume
+    # The volume of the pocket is equal to the number of voxels times the voxel volume
     volume = len(pocket) * (voxel_size**3)
     
     # Calculate centroid
@@ -891,7 +887,8 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     # After detecting pockets
     visualize_pockets(file_path, pocket_surface, voxel_grid, atoms_ids_and_coordinates, box=box)
 
-
+    # Use the filled pockets when computing the volume
+    calculate_pocket_properties(pockets, voxel_grid, box, voxel_size)
 
     #print(f"Step 6: Determining pocket surfaces...")
     '''
