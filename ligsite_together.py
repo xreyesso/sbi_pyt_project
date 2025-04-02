@@ -412,7 +412,7 @@ def filter_pockets_by_size(pockets, min_voxel_count=30):
 
 # STEP 6
 # Determine the surface of a pocket
-def determine_pocket_surface(voxel_grid, pockets_dict):
+def determine_pockets_surface_dict(voxel_grid, pockets_dict):
 
     pockets_surface_dict = defaultdict(list)
 
@@ -444,7 +444,7 @@ def determine_pocket_surface(voxel_grid, pockets_dict):
             if is_surface:
                 pockets_surface_dict[f'surface_{id}'].append(voxel)
                 #surface_neighbors[voxel] = neighbor_coords
-    print(pockets_surface_dict)
+   
     return pockets_surface_dict
 
 # STEP 7
@@ -652,41 +652,41 @@ def determine_pocket_surface_area(pocket_surface, voxel_grid,voxel_size = 0.5):
     # surface_area = len(surface_voxels) * (voxel_size**2)
     return counter * (voxel_size**2)
 
-def calculate_pocket_properties(pocket, voxel_grid, bounding_box, voxel_size=0.5):
+def calculate_pocket_properties(pocket_voxels, pocket_surface, voxel_grid, bounding_box, voxel_size=0.5):
     # Important: to compute the volumen of the pocket, use the pocket filled (before getting the surface grid points)
     xmin = bounding_box["X"][0]
     ymin = bounding_box["Y"][0]
     zmin = bounding_box["Z"][0]
     
     # The volume of the pocket is equal to the number of voxels times the voxel volume
-    volume = len(pocket) * (voxel_size**3)
+    volume = len(pocket_voxels) * (voxel_size**3)
     
     # Calculate centroid
     sum_x, sum_y, sum_z = 0, 0, 0
-    sum_psp = 0
+    #sum_psp = 0
     
-    for voxel in pocket:
+    for (i,j,k) in pocket_voxels:
         # Convert to Cartesian coordinates
-        cart_x = xmin + voxel[0]*voxel_size + voxel_size/2
-        cart_y = ymin + voxel[1]*voxel_size + voxel_size/2
-        cart_z = zmin + voxel[2]*voxel_size + voxel_size/2
+        cart_x = xmin + i * voxel_size + voxel_size / 2
+        cart_y = ymin + j * voxel_size + voxel_size / 2
+        cart_z = zmin + k * voxel_size + voxel_size / 2
         
         sum_x += cart_x
         sum_y += cart_y
         sum_z += cart_z
-        sum_psp += voxel_grid[voxel]
+        #sum_psp += voxel_grid[voxel]
     
     centroid = (sum_x/len(pocket), sum_y/len(pocket), sum_z/len(pocket))
-    avg_psp_score = sum_psp/len(pocket)
+    #avg_psp_score = sum_psp/len(pocket)
     
     # Approximate surface area by counting surface voxels
-
+    surface_area = len(pocket_surface) * (voxel_size**2)
     
     return {
         'volume': volume,
-        #'surface_area': surface_area,
+        'surface_area': surface_area,
         'centroid': centroid,
-        'score': avg_psp_score
+        #'score': avg_psp_score
     }
 
 # STEP 9
@@ -857,7 +857,7 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     pockets = filter_pockets_by_size(pockets)
     print(f"Found {len(pockets)} filtered potential binding sites.")
     #print(pockets)
-    pocket_surface = determine_pocket_surface(voxel_grid, pockets)
+    pocket_surface = determine_pockets_surface_dict(voxel_grid, pockets)
     #print(pocket_surface)
 
     identify_surrounding_residues_and_atoms(pocket_surface, residues_info_dict, atoms_ids_and_coordinates, box)
