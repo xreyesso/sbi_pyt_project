@@ -619,20 +619,37 @@ def visualize_pockets(pdb_file_path, pocket_surface, voxel_grid, atom_id_coords_
         plt.tight_layout()
         plt.show()
 
+def compute_distance_in_R3(x_1, y_1, z_1, x_2, y_2, z_2):
+    return math.sqrt((x_2 - x_1)**2 + (y_2 - y_1)**2 + (z_2 - z_1)**2)
+
 # STEP 8
+# Calculate pocket properties for a single pocket
 def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, voxel_size=0.5):
     # Important: to compute the volumen of the pocket, use the pocket filled (before getting the surface grid points)
     xmin = bounding_box["X"][0]
     ymin = bounding_box["Y"][0]
     zmin = bounding_box["Z"][0]
     
+    distances = []
+
     # The volume of the pocket is equal to the number of voxels times the voxel volume
     volume = len(pocket_voxels) * (voxel_size**3)
     
     # Calculate centroid
     sum_x, sum_y, sum_z = 0, 0, 0
     
-    for (i,j,k) in pocket_voxels:
+    # Store the cartesian coordinates of each center of a surface voxel in a list
+    coords = []
+    for surface_voxel in pocket_surface:
+        i, j, k = surface_voxel # These are the voxel indices
+        # Convert voxel indices to cartesian coordinates (using the center of the voxel)
+        x = xmin + i*voxel_size + voxel_size/2
+        y = ymin + j*voxel_size + voxel_size/2
+        z = zmin + k*voxel_size + voxel_size/2
+        coords.append((x,y,z))
+
+    for voxel in pocket_voxels:
+        i, j, k = voxel # These are the voxel indices
         # Convert voxel tuple to Cartesian coordinates (coordinates of voxel center)
         cart_x = xmin + i * voxel_size + voxel_size / 2
         cart_y = ymin + j * voxel_size + voxel_size / 2
@@ -641,6 +658,10 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
         sum_x += cart_x
         sum_y += cart_y
         sum_z += cart_z
+
+        # Get the minimum distance from voxel center to the centers of surface voxels
+        distances.append(
+            min([compute_distance_in_R3(cart_x, cart_y, cart_z, voxel_coords[0], voxel_coords[1], voxel_coords[2]) for voxel_coords in coords]))
     
     centroid = (sum_x/len(pocket_voxels), sum_y/len(pocket_voxels), sum_z/len(pocket_voxels))
     
@@ -650,9 +671,19 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
     return {
         'volume': volume,
         'surface_area': surface_area,
+        'depth': max(distances),
         'centroid': centroid,
-        #'depth': depth
     }
+
+# Calculate pockets info for ALL pockets
+def calculate_all_pockets_info(pockets, pockets_surface, box):
+    pockets_information = {}
+    for i in range(1, len(pockets)+1):
+        pocket_key = f'pocket_{i}' 
+        surface_key = f'surface_pocket_{i}'
+        pockets_information[pocket_key] = calculate_pocket_properties(
+            pockets[pocket_key], pockets_surface[surface_key], box)
+    return pockets_information
 
 # STEP 9
 
@@ -795,6 +826,8 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     # Create bounding box and grid
     box, voxel_grid, grid_dimensions = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
 
+    print(box)
+
     # Mark occupied voxels (protein atoms)
     voxel_grid = mark_occupied_voxels(atoms_ids_and_coordinates, file_path)
     
@@ -822,16 +855,16 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     pockets = filter_pockets_by_size(pockets)
     print(f"Found {len(pockets)} filtered potential binding sites.")
     #print(pockets)
-    pocket_surface = determine_pockets_surface_dict(voxel_grid, pockets)
+    pockets_surface = determine_pockets_surface_dict(voxel_grid, pockets)
     #print(pocket_surface)
 
-    identify_surrounding_residues_and_atoms(pocket_surface, residues_info_dict, atoms_ids_and_coordinates, box)
+    identify_surrounding_residues_and_atoms(pockets_surface, residues_info_dict, atoms_ids_and_coordinates, box)
 
     # After detecting pockets
-    visualize_pockets(file_path, pocket_surface, voxel_grid, atoms_ids_and_coordinates, box=box)
+    visualize_pockets(file_path, pockets_surface, voxel_grid, atoms_ids_and_coordinates, box=box)
 
-    # Use the filled pockets when computing the volume
-    calculate_pocket_properties(pockets, voxel_grid, box, voxel_size)
+    # Compute the properties (volume, surface area, depth, centroid) for ALL pockets
+    calculate_all_pockets_info(pockets, pockets_surface, box)
 
     #print(f"Step 6: Determining pocket surfaces...")
     '''
