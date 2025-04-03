@@ -37,6 +37,7 @@ van_der_Waals_radii = {
 r_atom_max = max([radius for radius in van_der_Waals_radii.values()])
 probe_radius = 1.4
 
+# STEP 0
 def PDB_iterator(pdb_file_path=None):
     if pdb_file_path is None:
         fi = sys.stdin
