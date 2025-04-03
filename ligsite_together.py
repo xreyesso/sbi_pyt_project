@@ -635,7 +635,7 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
     # The volume of the pocket is equal to the number of voxels times the voxel volume
     volume = len(pocket_voxels) * (voxel_size**3)
     
-    # Calculate centroid
+    # Calculate center of the pocket
     sum_x, sum_y, sum_z = 0, 0, 0
     
     # Store the cartesian coordinates of each center of a surface voxel in a list
@@ -663,7 +663,7 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
         distances.append(
             min([compute_distance_in_R3(cart_x, cart_y, cart_z, voxel_coords[0], voxel_coords[1], voxel_coords[2]) for voxel_coords in coords]))
     
-    centroid = (sum_x/len(pocket_voxels), sum_y/len(pocket_voxels), sum_z/len(pocket_voxels))
+    center = (sum_x/len(pocket_voxels), sum_y/len(pocket_voxels), sum_z/len(pocket_voxels))
     
     # Approximate surface area by counting surface voxels
     surface_area = len(pocket_surface) * (voxel_size**2)
@@ -672,7 +672,7 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
         'volume': volume,
         'surface_area': surface_area,
         'depth': max(distances),
-        'centroid': centroid,
+        'center': center,
     }
 
 # Calculate pockets info for ALL pockets
@@ -686,7 +686,27 @@ def calculate_all_pockets_info(pockets, pockets_surface, box):
     return pockets_information
 
 # STEP 9
+# Generate a report summary, a report and individual pdb files
 
+# Generate a report summary, to be printed in the terminal
+def print_results_summary(properties, residues_info):
+    print("=== Results Summary ===\n")
+    
+    for i in range(1, len(residues_info)+1):
+        properties_key = f'pocket_{i}'
+        residues_info_key = f'surface_pocket_{i}' 
+        print(f"Pocket {i}")
+        print(f"  Center: {properties[properties_key]['center']}")
+        print(f"  Surface area: {properties[properties_key]['surface_area']}")
+        print(f"  Volume: {properties[properties_key]['volume']}")
+        print(f"  Depth:  {properties[properties_key]['depth']}")
+        print(f"  Nearby residues: {len(residues_info[residues_info_key]['residues'])}")
+        residues = []
+        for (_, res_id), res_data in residues_info[residues_info_key]['residues'].items():
+            resname = res_data['name']
+            residues.append(resname + str(res_id))
+        residues_string = ", ".join(residues)
+        print(f"  Residues: {residues_string}")
 
 # Generate PDB file for predicted pockets
 def generate_pockets_pdb(pockets, voxel_grid, bounding_box, voxel_size, output_file):
@@ -810,7 +830,7 @@ def generate_pymol_script(protein_file, pockets_file, output_file):
         f.write("zoom\n")
 
 # Complete workflow function
-def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_PSP=3, max_pockets=5):
+def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_PSP=3, max_pockets=5):
     """
     Run the complete LIGSITE workflow for pocket detection
     """
@@ -822,72 +842,53 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     atoms_ids_and_coordinates, residues_info_dict = atoms_coordinates_dict(file_path)
     
     print(f"Step 2: Creating grid and marking occupied voxels...")
-    
     # Create bounding box and grid
     box, voxel_grid, grid_dimensions = create_bounding_box_and_voxels(atoms_ids_and_coordinates)
-
-    print(box)
 
     # Mark occupied voxels (protein atoms)
     voxel_grid = mark_occupied_voxels(atoms_ids_and_coordinates, file_path)
     
     print(f"Step 3: Scanning along axes to detect protein-solvent-protein events...")
-    
     # Scan along axes to detect PSP events
     axes = ['x','y','z']
     for axis in axes:
         voxel_grid = scan_along_axis(voxel_grid, grid_dimensions, axis)
 
     print(f"Step 4: Scanning along diagonals to detect protein-solvent-protein events...")
-    
     # Scan along diagonals to detect PSP events
     diagonals = [(1,1,1), (1,1,-1), (1,-1,1), (1,-1,-1)]
     for diagonal in diagonals:
         voxel_grid = scan_along_diagonal(grid_dimensions, voxel_grid, diagonal)
     
-    #print(f"Step 5: Defining pockets (MIN_PSP = {MIN_PSP})...")
-    
-    # Define pockets
-    pockets = define_pockets_and_cavities(voxel_grid, grid_dimensions)
+    # Find potential binding sites
+    print(f"Step 5: Detecting potential binding sites...")
 
-    print(f"Found {len(pockets)} potential binding sites.")
+    indent = " " * 8
+    pockets = define_pockets_and_cavities(voxel_grid, grid_dimensions)
+    print(f"{indent}Found {len(pockets)} regions of grid points with a minimum of {MIN_PSP} psp events.")
     
     pockets = filter_pockets_by_size(pockets)
-    print(f"Found {len(pockets)} filtered potential binding sites.")
-    #print(pockets)
+    print(f"{indent}Found {len(pockets)} pockets.")
+    
+    # Determine the pocket surface
+    print(f"Step 6: Extracting pocket surface voxels...")
     pockets_surface = determine_pockets_surface_dict(voxel_grid, pockets)
-    #print(pocket_surface)
 
-    identify_surrounding_residues_and_atoms(pockets_surface, residues_info_dict, atoms_ids_and_coordinates, box)
+    # Extract information about the surrounding residues and atoms
+    print(f"Step 7: Extracting information about surrounding residues and atoms...")
+    pockets_residues_info_dict = identify_surrounding_residues_and_atoms(pockets_surface, residues_info_dict, atoms_ids_and_coordinates, box)
 
     # After detecting pockets
     visualize_pockets(file_path, pockets_surface, voxel_grid, atoms_ids_and_coordinates, box=box)
 
-    # Compute the properties (volume, surface area, depth, centroid) for ALL pockets
-    calculate_all_pockets_info(pockets, pockets_surface, box)
+    # Compute the properties (volume, surface area, depth, center) for ALL pockets
+    print(f"Step 8: Computing the properties (volume, surface area, depth, center) for all pockets...\n")
+    pockets_properties_info_dict = calculate_all_pockets_info(pockets, pockets_surface, box)
 
-    #print(f"Step 6: Determining pocket surfaces...")
-    '''
-    # Determine pocket surfaces
-    pocket_surfaces = {}
-    for i, pocket in enumerate(true_pockets):
-        surface_voxels, connections = determine_pocket_surface(pocket, voxel_grid, grid_dimensions)
-        pocket_surfaces[i] = (surface_voxels, connections)
-    
-    print(f"Step 7: Identifying surrounding residues...")
-    
-    # Identify surrounding residues
-    pocket_residues = {}
-    for i, pocket in enumerate(true_pockets):
-        surface_voxels, _ = pocket_surfaces[i]
-        surrounding_residues = identify_surrounding_residues(surface_voxels, bounding_box, voxel_size, residues)
-        pocket_residues[i] = surrounding_residues
-        
-        print(f"  Pocket {i+1}: {len(surrounding_residues)} surrounding residues")
-    '''
+    # Print a results summary in stdout
+    print_results_summary(pockets_properties_info_dict, pockets_residues_info_dict)
+
     #print(f"Step 8: Generating output files...")
-    
-
     # Generate predicted pockets PDB file
     #pockets_pdb_file = os.path.join(output_dir, "predicted_pockets.pdb")
     #generate_pockets_pdb(pockets, voxel_grid, box, voxel_size, pockets_pdb_file)
@@ -905,7 +906,6 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=1.0, MIN_
     print(f"Output files saved to: {output_dir}")
     print(f"To visualize in PyMOL, run: pymol -x {pymol_script_file}")
     '''
-    #return pockets, cavities, voxel_grid, bounding_box
     
 if __name__ == "__main__":
     if len(sys.argv) > 1:
