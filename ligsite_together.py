@@ -200,6 +200,7 @@ def mark_occupied_voxels(residue_info_dict, box, voxel_grid, voxel_size, probe_r
                                 voxel_grid[(l, m, n)] = -1
     
     return voxel_grid
+
 # STEP 3
 def scan_along_axis(voxel_grid, grid_dimensions, axis):
     """
