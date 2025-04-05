@@ -7,16 +7,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-# Step 0: Read PDB file and get atom coordinates
-# Step 1: create 3D grid for the protein
-# Step 2: Set a value for each voxel. We start by setting all voxels to 0
-# a voxel that is inaccessible to solvent (because it is already occupied by the protein) gets a value of -1
-# Step 3: Scan along the x, y and z axis to detect solvent voxels enclosed on both sides by -1
-# Step 4: Scan along 4 cubic diagonals
-# A sequence of voxels which starts with protein, followed by solvent and ending with protein is 
-# calleda protein-solvent-protein (PSP) event.
-# Step 5: Detect pockets as regions of voxels with a minimum number of PSP events (MIN_PSP)
-# Check nearest neighbors
+# OVERVIEW
+# STEP 0: Read PDB file and get atoms and residues information.
+# STEP 1: Create a bounding box for the protein and divide this space into a grid made of voxels.
+# STEP 2: Set a value for each voxel. Start by setting all voxels to 0. A voxel that is inaccessible 
+#         to solvent (because it is already occupied by the protein) gets a value of -1.
+# STEP 3: A sequence of voxels which starts with protein, followed by solvent and ending with protein is 
+#         called a protein-solvent-protein (PSP) event. First, scan along the x, y and z axis to detect PSP events.
+# STEP 4: Scan along 4 cubic diagonals to detect more PSP events.
+# STEP 5: Detect pockets as regions of voxels with a minimum number of PSP events (MIN_PSP) and check nearest neighbors.
+
+
 # STEP 6
 # Distinguish cavities
 # STEP 7
@@ -39,6 +40,10 @@ probe_radius = 1.4
 
 # STEP 0
 def PDB_iterator(pdb_file_path=None):
+    """
+    Read the input pdb file and extract information about the residues (id, name, chain id) 
+    and atoms (id, name, coordinates).
+    """
     if pdb_file_path is None:
         fi = sys.stdin
     else:
@@ -63,6 +68,9 @@ def PDB_iterator(pdb_file_path=None):
     fi.close()
 
 def atoms_coordinates_dict(file_path):
+    """
+    Create two dictionaries to store the atoms information and the residues information, respectively.
+    """
     atom_id_coords_dict = {}
     residue_info_dict = {}
     
@@ -76,7 +84,7 @@ def atoms_coordinates_dict(file_path):
         # Create unique residue key (chain_ID, residue_ID)
         residue_key = (chain_ID, residue_ID)
         
-        # Initialize residue entry if it doesn't exist
+        # Initialize residue entry if it does not exist
         if residue_key not in residue_info_dict:
             residue_info_dict[residue_key] = {
                 'id': residue_ID,
@@ -97,9 +105,11 @@ def atoms_coordinates_dict(file_path):
     return atom_id_coords_dict, residue_info_dict
 
 # STEP 1    
-# The next step is to divide the 3D space (the bounding box in this case) into small cubes of x Angstrom per side
 def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 0.5):
-
+    """
+    Create a bounding box for the protein and divide this 3D space into small cubes of x Angstrom per side.
+    Each one of these small cubes is called a "voxel".
+    """
     x_coords = []
     y_coords = []
     z_coords = []
@@ -121,34 +131,26 @@ def create_bounding_box_and_voxels(atom_coordinates, voxel_size = 0.5):
     bounding_box_dict = {"X":[xmin, xmax], "Y":[ymin, ymax], "Z":[zmin, zmax]}
 
     # Add 1 to ensure we cover the bounding box
-    # TODO: is 1 or voxel_size what we need to add?? It's 1, it's indices not cartesian coordinates, voxel_size is the wrong unit
     range_x = math.floor((xmax - xmin)/voxel_size) + 1
     range_y = math.floor((ymax - ymin)/voxel_size) + 1
     range_z = math.floor((zmax - zmin)/voxel_size) + 1
-    #print(f"Voxel grid dimensions are: rangex={range_x}, rangey={range_y}, rangez={range_z}")
 
     # Generate voxel coordinates and store them in a dictionary
     voxel_grid = {}
-    for i in range(range_x): # recall: range(n) = 0, 1, 2, ..., n-1
+    for i in range(range_x): # Recall: range(n) = 0, 1, 2, ..., n-1
         for j in range(range_y):
             for k in range(range_z):
-                #Store in a dictionary with the indices i,j,k as key
+                # Store voxels in a dictionary with the indices i,j,k as key
                 voxel_grid[(i,j,k)] = 0
     
     return bounding_box_dict, voxel_grid, (range_x, range_y, range_z)
 
-
-# For atom in PDB determine all coordinates of voxels that overlap with this atom
-# set the grid coordinates to -1 if that’s the case 
-# def determine_if_within_bounding_cube_for_atom(center, point):
-#     # Compute Euclidean distance from atom center to voxel center
-#     distance = np.linalg.norm(center - point)
-#     if distance <= van_der_Waals_radii[center]:
-#         return True
-
 # STEP 2
 def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 0.5):
-  
+    """
+    A voxel is 'occupied' if there are protein atoms sufficiently close to it. Instead of checking all protein atoms, 
+    we restrict the search to a bounding box for the atom that considers its van der Waals radius and the probe radius.
+    """
     box, voxel_grid, _ = create_bounding_box_and_voxels(atom_coordinates, voxel_size)
 
     xmin = box["X"][0]
@@ -161,18 +163,13 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 0.5):
         r = r_atom + probe_radius
 
         # Compute voxel index in each direction
-        # Convert atom's "bounding box" coordinates into voxel grid indices
+        # Convert atom's bounding box coordinates into voxel grid indices
         i0 = math.floor((x - r - xmin) / voxel_size)
         j0 = math.floor((y - r - ymin) / voxel_size)
         k0 = math.floor((z - r - zmin) / voxel_size)
         i1 = math.floor((x + r - xmin) / voxel_size) + 1
         j1 = math.floor((y + r - ymin) / voxel_size) + 1
         k1 = math.floor((z + r - zmin) / voxel_size) + 1
-
-        # Determine which voxel this atom is in
-        #i = math.floor((x - xmin) / voxel_size) # because indices start at 0
-        #j = math.floor((y - ymin) / voxel_size)
-        #k = math.floor((z - zmin) / voxel_size)
         
         # Iterate over the voxel range defined above
         for l in range(i0, i1 + 1):
@@ -184,21 +181,25 @@ def mark_occupied_voxels(atom_coordinates, file_path, voxel_size = 0.5):
                     voxel_y = ymin + m*voxel_size + voxel_size / 2
                     voxel_z = zmin + n*voxel_size + voxel_size / 2
 
-                    # Compute distance from voxel center to atom center
+                    # Compute distance from voxel center to atom
                     distance = math.sqrt((voxel_x - x)**2 + (voxel_y - y)**2 + (voxel_z - z)**2)
                    
                     if distance <= r:
                         if (l, m, n) in voxel_grid:
-                            # Mark voxel as-1, i.e.occupied
+                            # Mark voxel as -1, i.e. occupied
                             voxel_grid[(l,m,n)] = -1
     
     return voxel_grid
 
 # STEP 3
-# Find solvent-accessible voxels (value = 0) that are enclosed between inaccessible voxels (value = -1)
-# along straight lines
-# We are looking for runs of zeros that are enclosed on both sides by -1, only those get incremented by 1
 def scan_along_axis(voxel_grid, grid_dimensions, axis):
+    """
+    A sequence of voxels which starts with protein, followed by solvent and ending with protein is 
+    called a protein-solvent-protein (PSP) event.
+    First, scan along the x, y and z axis to detect PSP events.
+    All values in between enclosing -1's are increased by 1 in each scan.
+    """
+
     range_x, range_y, range_z = grid_dimensions
 
     if axis == 'x':
@@ -216,9 +217,8 @@ def scan_along_axis(voxel_grid, grid_dimensions, axis):
     else:
         raise ValueError("Axis must be 'x', 'y' or 'z'")
 
-
     for i in dim1_range:
-        for j in dim2_range: # for all lines parallel to the indicated axis
+        for j in dim2_range: # For all lines parallel to the indicated axis
             solvent_voxels = None
 
             for s in scan_range:
@@ -241,11 +241,10 @@ def scan_along_axis(voxel_grid, grid_dimensions, axis):
     return voxel_grid
                 
 # STEP 4
-# Scan along the diagonals
 def scan_along_diagonal(grid_dimensions, voxel_grid, diagonal_vector):
     """
-    Scan along a diagonal direction specified by diagonal_vector.
-    diagonal_vector should be one of:
+    Scan along four cubic diagonals to reduce the dependency on the protein's orientation.
+    The scan direction is given by a diagonal_vector:
     (1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1)
     """
     range_x, range_y, range_z = grid_dimensions
