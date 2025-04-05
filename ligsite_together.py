@@ -103,7 +103,7 @@ def atoms_coordinates_dict(file_path):
 
 # STEP 1    
 def create_bounding_box_and_voxels(atom_coordinates, van_der_Waals_radii, voxel_size, probe_radius):
-	"""
+    """
     Create a bounding box for the protein and divide this 3D space into small cubes of x Angstrom per side.
     Each one of these small cubes is called a "voxel".
     """
