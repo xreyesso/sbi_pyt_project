@@ -15,17 +15,16 @@ import datetime
 # STEP 3: A sequence of voxels which starts with protein, followed by solvent and ending with protein is 
 #         called a protein-solvent-protein (PSP) event. First, scan along the x, y and z axis to detect PSP events.
 # STEP 4: Scan along 4 cubic diagonals to detect more PSP events.
-# STEP 5: Detect pockets as regions of voxels with a minimum number of PSP events (MIN_PSP) and check nearest neighbors.
+# STEP 5.1: Detect pockets as regions of voxels with a minimum number of PSP events (MIN_PSP) 
+#           by checking nearest neighbors.
+# STEP 5.2: Take out pockets that don't have the minimum number of voxels.
+# STEP 6: Determine the voxels that are part of the surface of a pocket, 
+#         by checking which voxels have protein neighbors.
+# STEP 7: Identify the aminoacids and atoms that surround the surface of a pocket.
+# STEP 8: Calculate the volume, surface area, depth and center for each pocket
+# STEP 9: Prepare output and display. Print results summary on the terminal, generate a report file, individual pdb files per pocket
+#         and a pymol script to visualize the results
 
-
-# STEP 6
-# Distinguish cavities
-# STEP 7
-# Determine the surface of a pocket
-# STEP 8
-# Identify the aminoacids and atoms that surround the surface of a pocket
-# STEP 9
-# Prepare output and display
 
 van_der_Waals_radii = {
     "C": 1.70,
@@ -307,36 +306,51 @@ def scan_along_diagonal(grid_dimensions, voxel_grid, diagonal_vector):
     return(voxel_grid)
 
 
-# STEP 5 
-# Define pockets and cavities
-# pockets is a list of lists
-def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP):
+# STEP 5.1
+nearest_neighbors = [
+        (1, 0, 0), (-1, 0, 0),  # x-axis neighbors
+        (0, 1, 0), (0, -1, 0),  # y-axis neighbors
+        (0, 0, 1), (0, 0, -1)   # z-axis neighbors
+    ]
+
+def cluster_into_pockets(voxel_grid, grid_dimensions, MIN_PSP):
+    """
+    Cluster the voxels into pockets by going through the voxels and their 
+    neighbors, clustering the ones that are nearby and reach the minimum
+    of protein-solvent-protein events.
+    """
+    
     visited = set()
     pockets = []
     range_x, range_y, range_z = grid_dimensions
 
-    # Find all grid points with values >= MIN_PSP
+    # Find all grid points with values >= MIN_PSP events (default is 3)
     for i in range(range_x):
         for j in range(range_y):
             for k in range(range_z):
                 voxel = (i, j, k)
                 
-                # Skip if already visited or below threshold or occupied by protein
+                # Skip if voxel coordinates have already been visited
+                # or are below the MIN_PSP threshold
                 if voxel in visited or voxel_grid.get(voxel, 0) < MIN_PSP:
                     continue
                 
-                # Start a new pocket
+                # Start a new pocket with the initial voxel
                 pocket = []
                 queue = deque([voxel])
                 visited.add(voxel)
                 
-                # Region growing process
+                # Start a region growing process, where we will expand from the initial voxel
+                # to a full pocket in all 6 dimensions
                 while queue:
+                    # Take the voxel that you want to explore from the queue,
+                    # always in order of discovery
                     current = queue.popleft()
                     pocket.append(current)
                     
-                    # Check 6-connected neighbors (full neighborhood)
-                    for direction in [(0,0,1), (0,0,-1), (0,1,0), (0,-1,0), (1,0,0), (-1,0,0)]:
+                    # Check the 6-connected neighbors of the voxel, and 
+                    # whether they are in the grid and reach the MIN_PSP
+                    for direction in nearest_neighbors:
                         di, dj, dk = direction
                         neighbor = (current[0]+di, current[1]+dj, current[2]+dk)
                         
@@ -344,221 +358,135 @@ def define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP):
                             0 <= neighbor[0] < range_x and 
                             0 <= neighbor[1] < range_y and 
                             0 <= neighbor[2] < range_z and
-                            voxel_grid.get(neighbor, 0) >= MIN_PSP and
-                            voxel_grid.get(neighbor, 0) != -1):
+                            voxel_grid.get(neighbor, 0) >= MIN_PSP):
                             
                             visited.add(neighbor)
                             queue.append(neighbor)  
                 
-                # Add the completed pocket
+                # Create a list of lists with the pockets
                 if pocket:
                     pockets.append(pocket)
     
     # Sort pockets by size (largest first)
     return sorted(pockets, key=len, reverse=True)
 
+# STEP 5.2
 def filter_pockets_by_size(pockets, min_voxel_count=30):
+    """
+    Filter out pockets that have a voxel count lower than the minimum,
+    due to them being too small
+    """
     pockets_dict = {}
     n = 1
+    # Iterate through the pockets
     for pocket in pockets:
         if len(pocket) >= min_voxel_count:
+            # Save the final pockets into a dictionary
             pockets_dict[f'pocket_{n}'] = pocket
             n +=1
     return pockets_dict
 
 # STEP 6
-# Determine the surface of a pocket
-def determine_pockets_surface_dict(voxel_grid, pockets_dict):
-
+def determine_pockets_surface(voxel_grid, pockets_dict):
+    """
+    Check which voxels of each pocket are part of the surface of the pocket,
+    by checking if any of their neighbors are protein voxels
+    """
     pockets_surface_dict = defaultdict(list)
 
-    # Define the 6 nearest neighbors in 3D grid (face-adjacent)
-    nearest_neighbors = [
-        (1, 0, 0), (-1, 0, 0),  # x-axis neighbors
-        (0, 1, 0), (0, -1, 0),  # y-axis neighbors
-        (0, 0, 1), (0, 0, -1)   # z-axis neighbors
-    ]
-    
-    # Process each pocket
+    # Iterate through the pockets
     for id, voxels in pockets_dict.items():
         
-        # Check each voxel in the pocket
+        # Iterate through the voxels of each pocket
         for voxel in voxels:
-            i, j, k = voxel # Retrieve the indices of the voxel
+            i, j, k = voxel
             
-            # Check if this voxel is a surface point
+            # Define is_surface as False
             is_surface = False
             
-            for di, dj, dk in nearest_neighbors:
+            # Check all the neighbors of the voxel to see if one of them is a protein
+            for direction in nearest_neighbors:
+                di, dj, dk = direction
                 neighbor = (i + di, j + dj, k + dk)
-                
-                # If neighbor is a protein voxel, this is a surface point
+                        
+                # If neighbor is inside the grid and it is a protein,
+                # the voxel we are looking at is a suface point
                 if neighbor in voxel_grid and voxel_grid[neighbor] == -1:
                     is_surface = True
             
-            # If this is a surface point, add it to our collection
+            # If the voxel is a surface point, add it to the pockets_surface_dict
             if is_surface:
                 pockets_surface_dict[f'surface_{id}'].append(voxel)
-                #surface_neighbors[voxel] = neighbor_coords
    
     return pockets_surface_dict
 
 
 # STEP 7
 def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_coords_dict, bounding_box, voxel_size, probe_radius):
-    
+    """
+    Identify the aminoacids and atoms that surround the surface of a pocket, by 
+    finding the atoms which are at a certain distance of the surface voxels.
+    """
     # Get the minimum coordinates of the bounding box
     xmin = bounding_box["X"][0]
     ymin = bounding_box["Y"][0]
     zmin = bounding_box["Z"][0]
     
-    # Define the distance threshold for considering an atom as surrounding a pocket
-    # Usually slightly larger than the sum of probe radius and voxel size
+    # Define the distance threshold for considering an atom as surrounding the pocket
+    # This threshold is the probe-radius plus an average of the Van der Waals radii value
     distance_threshold = probe_radius + 1.7
     
     pocket_surroundings = {}
     
-    # Process each pocket
+    # Iterate through each pocket surface
     for pocket_id, surface_points in pocket_surfaces.items():
         surrounding_residues = {}
-        surrounding_atoms = {}
 
-        # Check each surface point
+        # Iterate through the voxels of each pocket surface
         for surface_voxel in surface_points:
-            # Convert voxel indices to cartesian coordinates (using the center of the voxel)
+            # Convert the voxels to cartesian coordinates (using the center of the voxel)
             i, j, k = surface_voxel
             voxel_x = xmin + i*voxel_size + voxel_size/2
             voxel_y = ymin + j*voxel_size + voxel_size/2
             voxel_z = zmin + k*voxel_size + voxel_size/2
             voxel_center = np.array([voxel_x, voxel_y, voxel_z])
         
-            # Check all atoms to find those close to this surface point
+            # Iteate through the atoms to find those close to this surface point
             for atom_id, coords in atom_id_coords_dict.items():
                 atom_coords = np.array(coords)
                 distance = np.linalg.norm(voxel_center - atom_coords)
 
-                # If the atom is within the threshold distance, consider it surrounding
+                # If the atom is within the threshold distance, consider it as surrounding the pocket
                 if distance <= distance_threshold:
                     
                     # Find which residue this atom belongs to
                     for residue_key, residue_info in residues.items():
                         for id in residue_info['atom_ids']:
                             if id == atom_id:
-                                # Add this residue to our collection
+                                # Add this residue to our dictionary of surrounding residues for that pocket
                                 if residue_key not in surrounding_residues:
                                     surrounding_residues[residue_key] = {
                                         'name': residue_info['name'],
                                         'atoms': []
                                     }
                                 
-                                # Add the atom to this residue (if not already there)
+                                # Add the atom that we know is close to the pocket to this residue (if it is not already there)
                                 if atom_id not in [a[0] for a in surrounding_residues[residue_key]['atoms']]:
                                     atom_idx = residue_info['atom_ids'].index(atom_id)
                                     atom_name = residue_info['atoms'][atom_idx]
                                     surrounding_residues[residue_key]['atoms'].append((id,coords,atom_name))
                                 break
         
-        # Add the results for this pocket
+        # Add the surrounding residues for a specific pocket
         pocket_surroundings[pocket_id]= surrounding_residues
     
     return pocket_surroundings
 
-
-def visualize_pockets(pdb_file_path, pocket_surface, atom_id_coords_dict, voxel_size, box):
-
-    # Convert back the pocket_surface dictionary to a list of lists to use visualization without further major changes
-    pockets = []
-    for pocket_surface in pocket_surface.values():
-        pockets.append(pocket_surface)
-
-    # Extract atom coordinates
-    atom_coords = np.array(list(atom_id_coords_dict.values()))
-    
-    # Create figure
-    fig = plt.figure(figsize=(12, 10))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Plot protein atoms as small gray dots
-    ax.scatter(atom_coords[:, 0], atom_coords[:, 1], atom_coords[:, 2], 
-               c='gray', s=1, alpha=0.3, label='Protein')
-    
-    # Define colors for different pockets
-    colors = ['red', 'blue', 'green', 'purple', 'orange', 'cyan', 'magenta', 'yellow']
-    
-    # Plot top pockets (up to 8)
-    for i, pocket in enumerate(pockets[:min(len(pockets), len(colors))]):
-        # Calculate pocket center
-        pocket_voxels = np.array(pocket)
-        
-        # Convert voxel indices to Cartesian coordinates
-        if box is not None:
-            xmin, ymin, zmin = box["X"][0], box["Y"][0], box["Z"][0]
-            pocket_coords = np.zeros((len(pocket_voxels), 3))
-            for j, (x, y, z) in enumerate(pocket_voxels):
-                # Convert voxel center to Cartesian coordinates
-                pocket_coords[j, 0] = xmin + x * voxel_size + voxel_size / 2
-                pocket_coords[j, 1] = ymin + y * voxel_size + voxel_size / 2
-                pocket_coords[j, 2] = zmin + z * voxel_size + voxel_size / 2
-        else:
-            # If no box is provided, just use the voxel indices scaled by voxel_size
-            pocket_coords = pocket_voxels * voxel_size
-        
-        # Plot pocket voxels
-        ax.scatter(pocket_coords[:, 0], pocket_coords[:, 1], pocket_coords[:, 2],
-                   c=colors[i], s=20, alpha=0.7, label=f'Pocket {i+1} ({len(pocket)} voxels)')
-        
-        # Calculate and plot pocket center
-        center = np.mean(pocket_coords, axis=0)
-        ax.scatter([center[0]], [center[1]], [center[2]], 
-                   c=colors[i], s=100, edgecolor='black', marker='o')
-        
-        # Optional: Draw a sphere to represent the pocket volume
-        # This is an approximation of the pocket shape
-        pocket_size = len(pocket)
-        r = (pocket_size * voxel_size**3 / (4/3 * np.pi))**(1/3)  # Approximate radius
-        
-        u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
-        x = center[0] + r * np.cos(u) * np.sin(v)
-        y = center[1] + r * np.sin(u) * np.sin(v)
-        z = center[2] + r * np.cos(v)
-        ax.plot_surface(x, y, z, color=colors[i], alpha=0.1)
-    
-    # Set labels and title
-    ax.set_xlabel('X (Å)')
-    ax.set_ylabel('Y (Å)')
-    ax.set_zlabel('Z (Å)')
-    ax.set_title(f'Protein Structure and Detected Pockets for {pdb_file_path}')
-    
-    # Add legend
-    plt.legend(loc='upper right')
-    
-    # Set equal aspect ratio
-    # Calculate the bounds
-    max_range = np.array([
-        atom_coords[:, 0].max() - atom_coords[:, 0].min(),
-        atom_coords[:, 1].max() - atom_coords[:, 1].min(),
-        atom_coords[:, 2].max() - atom_coords[:, 2].min()
-    ]).max() / 2.0
-    
-    mid_x = (atom_coords[:, 0].max() + atom_coords[:, 0].min()) / 2
-    mid_y = (atom_coords[:, 1].max() + atom_coords[:, 1].min()) / 2
-    mid_z = (atom_coords[:, 2].max() + atom_coords[:, 2].min()) / 2
-    
-    ax.set_xlim(mid_x - max_range, mid_x + max_range)
-    ax.set_ylim(mid_y - max_range, mid_y + max_range)
-    ax.set_zlim(mid_z - max_range, mid_z + max_range)
-    
-    
-    plt.tight_layout()
-    plt.show()
-
-def compute_distance_in_R3(x_1, y_1, z_1, x_2, y_2, z_2):
-    return math.sqrt((x_2 - x_1)**2 + (y_2 - y_1)**2 + (z_2 - z_1)**2)
-
 # STEP 8
-# Calculate pocket properties for a single pocket
-def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, voxel_size=0.5):
-    # Important: to compute the volumen of the pocket, use the pocket filled (before getting the surface grid points)
+def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, voxel_size):
+    """
+    Calculate pocket properties for a single pocket (volume, surface area, depth and center)
+    """
     xmin = bounding_box["X"][0]
     ymin = bounding_box["Y"][0]
     zmin = bounding_box["Z"][0]
@@ -574,7 +502,7 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
     # Store the cartesian coordinates of each center of a surface voxel in a list
     coords = []
     for surface_voxel in pocket_surface:
-        i, j, k = surface_voxel # These are the voxel indices
+        i, j, k = surface_voxel 
         # Convert voxel indices to cartesian coordinates (using the center of the voxel)
         x = xmin + i*voxel_size + voxel_size/2
         y = ymin + j*voxel_size + voxel_size/2
@@ -608,8 +536,10 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
         'center': center,
     }
 
-# Calculate pockets info for ALL pockets
 def calculate_all_pockets_info(pockets, pockets_surface, box, voxel_size):
+    """
+    Calculate pockets properties for all pockets
+    """
     pockets_information = {}
     for i in range(1, len(pockets)+1):
         pocket_key = f'pocket_{i}' 
@@ -618,11 +548,13 @@ def calculate_all_pockets_info(pockets, pockets_surface, box, voxel_size):
             pockets[pocket_key], pockets_surface[surface_key], box, voxel_size)
     return pockets_information
 
-# STEP 9
-# Generate a report summary, a report and individual pdb files
 
-# Generate a report summary, to be printed in the terminal
+# STEP 9:
+
 def print_results_summary(properties, residues_info):
+    """
+    Generates a report summary which is printed in the terminal
+    """
     print("=== Results Summary ===\n")
     
     for i in range(1, len(residues_info)+1):
@@ -644,7 +576,10 @@ def print_results_summary(properties, residues_info):
 
 def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals_dict, 
                             pockets_dict, pocket_surroundings, pocket_properties, min_psp=3, min_voxel_count=30):
-    
+    """
+    Generates a full report which is stored in an output file
+    """
+
     with open(output_file, 'w') as f:
         f.write("=============================================================\n")
         f.write("                   PREDICTED POCKETS REPORT                   \n")
@@ -693,7 +628,7 @@ def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals
                 else:
                     f.write("  No residues have been found in this pocket\n\n")
                 
-                # List atoms in the surface of the pocket
+                # List of atoms in the surface of the pocket
                 f.write(f"Atoms in the surface of the pocket:\n")
                 atoms_text = []
 
@@ -714,12 +649,11 @@ def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals
                 f.write("No surrounding residues or atoms information available.\n\n")
     
       
-# Generate PDB file for predicted pockets
 def generate_pocket_pdb(pocket_number, voxels, properties, bounding_box, voxel_size, output_file):
     """
     Generate a PDB file for a single pocket with extra information.
     """
-    
+
     xmin = bounding_box["X"][0]
     ymin = bounding_box["Y"][0]
     zmin = bounding_box["Z"][0]
@@ -756,7 +690,7 @@ def generate_pocket_pdb(pocket_number, voxels, properties, bounding_box, voxel_s
         # End file
         f.write("END\n")
             
-# Generate PDB file for pocket residues
+
 def generate_pocket_residues_pdb(pocket_number, surrounding_residues, atom_coords_dict, output_file):
     """
     Generate a PDB file containing the residues surrounding a pocket.
@@ -890,6 +824,103 @@ def generate_pymol_script(protein_file, pocket_files, residue_files, output_file
         f.write("center protein_structure\n")
         f.write("zoom\n")
 
+
+
+
+def visualize_pockets(pdb_file_path, pocket_surface, atom_id_coords_dict, voxel_size, box):
+
+    # Convert back the pocket_surface dictionary to a list of lists to use visualization without further major changes
+    pockets = []
+    for pocket_surface in pocket_surface.values():
+        pockets.append(pocket_surface)
+
+    # Extract atom coordinates
+    atom_coords = np.array(list(atom_id_coords_dict.values()))
+    
+    # Create figure
+    fig = plt.figure(figsize=(12, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Plot protein atoms as small gray dots
+    ax.scatter(atom_coords[:, 0], atom_coords[:, 1], atom_coords[:, 2], 
+               c='gray', s=1, alpha=0.3, label='Protein')
+    
+    # Define colors for different pockets
+    colors = ['red', 'blue', 'green', 'purple', 'orange', 'cyan', 'magenta', 'yellow']
+    
+    # Plot top pockets (up to 8)
+    for i, pocket in enumerate(pockets[:min(len(pockets), len(colors))]):
+        # Calculate pocket center
+        pocket_voxels = np.array(pocket)
+        
+        # Convert voxel indices to Cartesian coordinates
+        if box is not None:
+            xmin, ymin, zmin = box["X"][0], box["Y"][0], box["Z"][0]
+            pocket_coords = np.zeros((len(pocket_voxels), 3))
+            for j, (x, y, z) in enumerate(pocket_voxels):
+                # Convert voxel center to Cartesian coordinates
+                pocket_coords[j, 0] = xmin + x * voxel_size + voxel_size / 2
+                pocket_coords[j, 1] = ymin + y * voxel_size + voxel_size / 2
+                pocket_coords[j, 2] = zmin + z * voxel_size + voxel_size / 2
+        else:
+            # If no box is provided, just use the voxel indices scaled by voxel_size
+            pocket_coords = pocket_voxels * voxel_size
+        
+        # Plot pocket voxels
+        ax.scatter(pocket_coords[:, 0], pocket_coords[:, 1], pocket_coords[:, 2],
+                   c=colors[i], s=20, alpha=0.7, label=f'Pocket {i+1} ({len(pocket)} voxels)')
+        
+        # Calculate and plot pocket center
+        center = np.mean(pocket_coords, axis=0)
+        ax.scatter([center[0]], [center[1]], [center[2]], 
+                   c=colors[i], s=100, edgecolor='black', marker='o')
+        
+        # Optional: Draw a sphere to represent the pocket volume
+        # This is an approximation of the pocket shape
+        pocket_size = len(pocket)
+        r = (pocket_size * voxel_size**3 / (4/3 * np.pi))**(1/3)  # Approximate radius
+        
+        u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
+        x = center[0] + r * np.cos(u) * np.sin(v)
+        y = center[1] + r * np.sin(u) * np.sin(v)
+        z = center[2] + r * np.cos(v)
+        ax.plot_surface(x, y, z, color=colors[i], alpha=0.1)
+    
+    # Set labels and title
+    ax.set_xlabel('X (Å)')
+    ax.set_ylabel('Y (Å)')
+    ax.set_zlabel('Z (Å)')
+    ax.set_title(f'Protein Structure and Detected Pockets for {pdb_file_path}')
+    
+    # Add legend
+    plt.legend(loc='upper right')
+    
+    # Set equal aspect ratio
+    # Calculate the bounds
+    max_range = np.array([
+        atom_coords[:, 0].max() - atom_coords[:, 0].min(),
+        atom_coords[:, 1].max() - atom_coords[:, 1].min(),
+        atom_coords[:, 2].max() - atom_coords[:, 2].min()
+    ]).max() / 2.0
+    
+    mid_x = (atom_coords[:, 0].max() + atom_coords[:, 0].min()) / 2
+    mid_y = (atom_coords[:, 1].max() + atom_coords[:, 1].min()) / 2
+    mid_z = (atom_coords[:, 2].max() + atom_coords[:, 2].min()) / 2
+    
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+    
+    
+    plt.tight_layout()
+    plt.show()
+
+def compute_distance_in_R3(x_1, y_1, z_1, x_2, y_2, z_2):
+    return math.sqrt((x_2 - x_1)**2 + (y_2 - y_1)**2 + (z_2 - z_1)**2)
+
+
+
+
 # Complete workflow to find the pockets of the protein
 def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_PSP=3, probe_radius = 1.4):
    
@@ -919,10 +950,10 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     for diagonal in diagonals:
         voxel_grid = scan_along_diagonal(grid_dimensions, voxel_grid, diagonal)
     
-    # Find potential binding sites
-    print(f"Step 5: Detecting potential binding sites...")
+    # Find potential pockets
+    print(f"Step 5: Detecting potential pockets...")
 
-    pockets_list = define_pockets_and_cavities(voxel_grid, grid_dimensions, MIN_PSP)
+    pockets_list = cluster_into_pockets(voxel_grid, grid_dimensions, MIN_PSP)
     print(f"        Found {len(pockets_list)} regions of grid points with a minimum of {MIN_PSP} psp events.")
 
     pockets_dict = filter_pockets_by_size(pockets_list,)
@@ -930,30 +961,27 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     
     # Determine the pocket surface
     print(f"Step 6: Extracting pocket surface voxels...")
-    pockets_surface = determine_pockets_surface_dict(voxel_grid, pockets_dict)
+    pockets_surface = determine_pockets_surface(voxel_grid, pockets_dict)
 
-    # Extract information about the surrounding residues and atoms
-    print(f"Step 7: Extracting information about surrounding residues and atoms...")
+    # Determine the surrounding residues and atoms in each pocket
+    print(f"Step 7: Extracting the surrounding residues and atoms per pocket...")
     pockets_residues_info_dict = identify_surrounding_residues_and_atoms(pockets_surface, residues_info_dict, atoms_ids_and_coordinates, 
                                                                          box, voxel_size, probe_radius)
-
-    # After detecting pockets
-    visualize_pockets(file_path, pockets_surface, atoms_ids_and_coordinates, voxel_size, box)
-
-    # Compute the properties (volume, surface area, depth, center) for ALL pockets
+    
+    # Compute the properties (volume, surface area, depth, center) for all pockets
     print(f"Step 8: Computing the properties (volume, surface area, depth, center) for all pockets...\n")
     pockets_properties_info_dict = calculate_all_pockets_info(pockets_dict, pockets_surface, box, voxel_size)
-
-    # Print a results summary in stdout
-    print_results_summary(pockets_properties_info_dict, pockets_residues_info_dict)
-
-    report_file = os.path.join(output_dir, "pocket_report.txt")
-    generate_pockets_report(report_file, voxel_size, probe_radius, van_der_Waals_radii, pockets_dict,
-                            pockets_residues_info_dict, pockets_properties_info_dict, MIN_PSP, min_voxel_count=30)
-
+    
     # Generate output files
     print(f"\nStep 9: Generating output files...")
     
+    # Print a results summary in stdout
+    print_results_summary(pockets_properties_info_dict, pockets_residues_info_dict)
+
+    report_file = os.path.join(output_dir, "pockets_report.txt")
+    generate_pockets_report(report_file, voxel_size, probe_radius, van_der_Waals_radii, pockets_dict,
+                            pockets_residues_info_dict, pockets_properties_info_dict, MIN_PSP, min_voxel_count=30)
+
     # Generate individual PDB files for each pocket and its residues
     pocket_files = []
     residue_files = []
@@ -983,14 +1011,21 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     print(f"To visualize the results in PyMOL, run: pymol {pymol_script}")
     
 
+    # Visualize pockets
+    visualize_pockets(file_path, pockets_surface, atoms_ids_and_coordinates, voxel_size, box)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         pdb_file = sys.argv[1]
+        protein = pdb_file.split('.')[0]
+        output_dir = f"./{protein}_output"
+
     else:
         print("Usage: python ligsite.py [pdb_file]")
         print("No PDB file specified, using default file '1a6u.pdb'")
         pdb_file = "1a6u.pdb"  # Default PDB file
     
     # Run the workflow
-    run_complete_workflow(pdb_file)
+    run_complete_workflow(pdb_file, output_dir)
 
