@@ -157,11 +157,7 @@ def mark_occupied_voxels(residue_info_dict, box, voxel_grid, voxel_size, probe_r
     # Iterate through each residue and its atoms
     for residue_key, residue_data in residue_info_dict.items():
         # Process each atom in the residue
-        for idx, (atom_name, coords, atom_id) in enumerate(zip(
-            residue_data['atoms'], 
-            residue_data['atom_coords'], 
-            residue_data['atom_ids']
-        )):
+        for idx, coords in enumerate(residue_data['atom_coords']):
             # Extract element from atom name (first character)
             element = residue_data['elements'][idx]
             
@@ -271,11 +267,7 @@ def scan_along_diagonal(grid_dimensions, voxel_grid, diagonal_vector):
         y_starts = range(range_y)
     else:
         y_starts = range(range_y - 1, -1, -1) # Start from the end
-    if dz > 0:
-        z_starts = range(range_z)
-    else:
-        z_starts = range(range_z - 1, -1, -1) # Start from the end
-
+    
     # Plane (x,y) scan
     for start_x in x_starts:
         for start_y in y_starts:
@@ -920,10 +912,10 @@ def compute_distance_in_R3(x_1, y_1, z_1, x_2, y_2, z_2):
 
 
 
-
-# Complete workflow to find the pockets of the protein
 def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_PSP=3, probe_radius = 1.4):
-   
+    """
+    Complete workflow to find the pockets of the protein
+    """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
