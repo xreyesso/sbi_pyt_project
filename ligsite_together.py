@@ -470,7 +470,7 @@ def identify_surrounding_residues_and_atoms(pocket_surfaces, residues, atom_id_c
                                 break
         
         # Add the surrounding residues for a specific pocket
-        pocket_surroundings[pocket_id]= surrounding_residues
+        pocket_surroundings[pocket_id] = surrounding_residues
     
     return pocket_surroundings
 
@@ -699,32 +699,34 @@ def generate_pocket_residues_pdb(pocket_number, surrounding_residues, atom_coord
             atom_count = len(res_info['atoms'])
             f.write(f"REMARK  {chain_id} {res_info['name']:3s} {res_id:4d} ({atom_count} atoms)\n")
         
-        atom_idx = 1
-        ter_points = []
+        #ter_points = []
         
+        surrounding_residues_sorted = dict(sorted(surrounding_residues.items(), key = lambda x: x[0][1]))
         # Group by chain and residue
-        for (chain_id, res_id), res_info in sorted(surrounding_residues.items()):
+        for (chain_id, res_id), res_info in surrounding_residues_sorted.items():
             # Track where TER records should go
-            ter_points.append(atom_idx + len(res_info['atoms']))
+            #ter_points.append(atom_idx + len(res_info['atoms']))
             
             # Write all atoms 
-            for idx, atom_id in enumerate(res_info['atoms']):
-                x, y, z = atom_coords_dict[atom_id]
-                
+            for atom_tuple in res_info['atoms']:
+                atom_id = atom_tuple[0]
+                x, y, z = atom_tuple[1]
+                atom_name = atom_tuple[2]
+
+                """
                 atom_name = "UNK"
                 if 'atoms' in res_info and idx < len(res_info['atoms']):
                     atom_name = res_info['atoms'][idx]
                 elif 'elements' in res_info and idx < len(res_info['elements']):
                     atom_name = res_info['elements'][idx]
-                
-                f.write(f"ATOM  {atom_idx:5d} {str(atom_name):4s} {res_info['name']:3s} {chain_id}{res_id:4d}    "
+                """
+                f.write(f"ATOM  {atom_id:5d} {str(atom_name):4s} {res_info['name']:3s} {chain_id}{res_id:4d}    "
                         f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 {res_id/100:5.2f}      "
                         f"{chain_id}  \n")
-                atom_idx += 1
         
         # Add TER lines between
-        for ter_point in ter_points[:-1]:  # All except the last one
-            f.write(f"TER   {ter_point:5d}\n")
+        """for ter_point in ter_points[:-1]:  # All except the last one
+            f.write(f"TER   {ter_point:5d}\n")"""
         
         f.write(f"END\n")
 
@@ -978,8 +980,9 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     pocket_files = []
     residue_files = []
     
-    for pocket_id, voxels in pockets_dict.items():
-        pocket_num = int(pocket_id.split('_')[1]) 
+    for pocket_surface_id, voxels in pockets_surface.items():
+        pocket_num = int(pocket_surface_id.split('_')[2])
+        pocket_id = f"pocket_{pocket_num}"
         properties = pockets_properties_info_dict[pocket_id]
         
         # Generate pocket PDB file
@@ -988,8 +991,7 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
         pocket_files.append(pocket_file)
         
         # Generate residues PDB file
-        surface_key = f'surface_{pocket_id}'
-        residues = pockets_residues_info_dict.get(surface_key, {}).get('residues', {})
+        residues = pockets_residues_info_dict.get(pocket_surface_id, {})
         residue_file = os.path.join(output_dir, f"pocket_{pocket_num}_residues.pdb")
         generate_pocket_residues_pdb(pocket_num, residues, atoms_ids_and_coordinates, residue_file)
         residue_files.append(residue_file) 
@@ -1012,12 +1014,12 @@ if __name__ == "__main__":
         pdb_file = sys.argv[1]
         protein = pdb_file.split('.')[0]
         output_dir = f"./{protein}_output"
+        # Run the workflow
+        run_complete_workflow(pdb_file, output_dir)
 
     else:
-        print("Usage: python ligsite.py [pdb_file]")
-        print("No PDB file specified, using default file '1a6u.pdb'")
-        pdb_file = "1a6u.pdb"  # Default PDB file
+        print("Usage: python find_pockets.py [pdb_file]")
+        
     
-    # Run the workflow
-    run_complete_workflow(pdb_file, output_dir)
+    
 
