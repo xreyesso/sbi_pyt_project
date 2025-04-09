@@ -702,7 +702,7 @@ def generate_pocket_data_table(pocket_surroundings, output_file):
             # Add detailed atom information section
             f.write("Detailed Atom Information:\n")
             f.write(f"{'Chain':>6}{'Residue':>10}{'ResID':>8}{'AtomID':>8}{'Atom Name':>12}{'X':>10}{'Y':>10}{'Z':>10}\n")
-            f.write("-" * 72 + "\n")
+            f.write("-" * 74 + "\n")
             
             for (chain_id, res_id), surrounding_residues in pocket_residues.items():
                 for atom_tuple in surrounding_residues['atoms']:
