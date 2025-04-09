@@ -37,12 +37,15 @@ van_der_Waals_radii = {
 }
 
 color_list = [
-        "red", "green", "blue", "yellow", "magenta", 
-        "cyan", "orange", "hot pink", "lime green", "deep sky blue",
-        "gold", "purple", "salmon", "forest green", "dodger blue",
-        "olive", "sienna", "violet", "teal", "tomato",
-        "navy blue", "chocolate", "spring green", "crimson", "medium purple"
-    ]
+    "red", "green", "blue", "yellow", "magenta", 
+    "cyan", "orange", "hot pink", "lime green", "deep sky blue",
+    "gold", "purple", "salmon", "forest green", "dodger blue",
+    "olive", "sienna", "violet", "teal", "tomato",
+    "navy blue", "chocolate", "spring green", "crimson", "medium purple",
+    "indigo", "coral", "turquoise", "plum", "maroon",
+    "orchid", "deep sky blue", "sea green", "slate blue", "firebrick"
+]
+
 
 # STEP 0
 def PDB_iterator(pdb_file_path=None):
@@ -578,8 +581,7 @@ def filter_pockets_by_number_of_residues(pockets_dict, pocket_surroundings, pock
             filtered_pocket_surroundings[f"surface_pocket_{i}"] = surrounding_residues
             filtered_pocket_properties[f"pocket_{i}"] = pocket_properties[original_pocket_id]
             i += 1
-    print(pocket_properties)
-    print(filtered_pocket_properties)
+
     return filtered_pockets_dict, filtered_pocket_surroundings, filtered_pocket_properties
 
 
@@ -770,7 +772,7 @@ def generate_pocket_residues_pdb(pocket_number, pocket_surroundings, output_file
             f.write(f"TER   {ter_point:5d}\n")"""
         f.write(f"END\n")
 
-def generate_chimera_script_pockets(protein_pdb, pocket_files, output_script):
+def generate_chimera_script_pockets(protein_pdb, pocket_files, color_list, output_script):
     """
     Generate a Chimera script to visualize the original protein structure along with all pocket residues.
     """
@@ -788,15 +790,7 @@ def generate_chimera_script_pockets(protein_pdb, pocket_files, output_script):
         f.write("color skyblue #0\n")  # Color protein skyblue
         f.write("surface #0\n")  # Add surface to the protein
         
-        # Create an expanded color list for up to 25 pockets
-        color_list = [
-            "red", "green", "blue", "yellow", "magenta", 
-            "cyan", "orange", "hot pink", "lime green", "deep sky blue",
-            "gold", "purple", "salmon", "forest green", "dodger blue",
-            "olive", "sienna", "violet", "teal", "tomato",
-            "navy blue", "chocolate", "spring green", "crimson", "medium purple"
-        ]
-        
+               
         # Load and visualize each pocket
         f.write("\n# Load and visualize pocket surfaces\n")
         for i, pocket_file in enumerate(pocket_files):
@@ -842,7 +836,7 @@ def start_chimera_script(protein_pdb, f):
     
     # Set up the visualization style for the protein
     f.write("\n# Set up ball & stick visualization style for the protein\n")
-    f.write("color skyblue #0\n")  # Color protein skyblue
+    f.write("color white #0\n")  # Color protein skyblue
     f.write("~ribbon #0\n")  # Hide ribbon representation
     f.write("~surface #0\n")  # Hide any surface representation
     f.write("show #0\n")  # Show protein atoms
@@ -864,23 +858,24 @@ def end_chimera_script(pocket_surroundings, color_list, f):
         pocket_num = i + 1
         color = color_list[i % len(color_list)]
         
-        # Calculate column number (0-based) and position within column
-        column = i // max_pockets_per_column
+        # Determine which column the pocket label belongs to( First 16 --> 0, until 30Calculate column number (0-based) and position within column
+        column = i // max_pockets_per_column 
         position_in_column = i % max_pockets_per_column
         
         # Only create a new column if we exceed 16 pockets
         if num_pockets <= max_pockets_per_column:
-            # Just one column if 16 or fewer pockets
-            xpos = 0.1
-            ypos = 0.9 - 0.05 * i
+            # Generate just one column if there's 16 or fewer pockets
+            xpos = 0.02
+            ypos = 0.9 - 0.08 * i
         else:
-            # Multiple columns if more than 16 pockets
-            xpos = 0.1 + 0.4 * column
+            # Generate more columns if there is more than 16 pockets
+            xpos = 0.02 + 0.08 * column
             ypos = 0.9 - 0.05 * position_in_column
             
         f.write(f"2dlabels create pocket{pocket_num} text \"Pocket {pocket_num}\" xpos {xpos} ypos {ypos} color {color}\n")
     # Set up view parameters
     f.write("\n# Set up view parameters\n")
+    
     
     # Add lighting effects
     f.write("\n# Enhance lighting\n")
@@ -889,9 +884,11 @@ def end_chimera_script(pocket_surroundings, color_list, f):
     # Center and zoom on the protein
     f.write("\n# Center on the protein\n")
     f.write("focus\n")
-    f.write("turn y 30\n")
-    f.write("turn x 20\n")
-        
+    f.write("move x 10\n")
+
+# f.write("turn y 30\n")
+# f.write("turn x 20\n")
+       
 def chimera_script_residues_bs(pocket_surroundings, color_list, f):
     """
     Generate a Chimera script to visualize the original protein structure along with all pocket residues.
@@ -1123,15 +1120,15 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
                                                                          box, voxel_size, probe_radius)
     
     # Compute the properties (volume, surface area, depth, center) for all pockets
-    print(f"Step 8: Computing the properties (volume, surface area, depth, center) for all pockets...\n")
+    print(f"Step 8: Computing the properties (volume, surface area, depth, center) for all pockets...")
     pockets_properties_info_dict = calculate_all_pockets_info(pockets_dict, pockets_surface, box, voxel_size)
     
     print(f"Step 9: Filtering pockets by number of residues")
     pockets_dict, pockets_residues_info_dict, pockets_properties_info_dict =  filter_pockets_by_number_of_residues(pockets_dict, pockets_residues_info_dict, pockets_properties_info_dict)    
-    print("Found pockets")
+    print(f"        Final number of pockets found: {len(pockets_dict)}")
     
     # Generate output files
-    print(f"\nStep 10: Generating output files...")
+    print(f"Step 10: Generating output files...\n")
     
     # Print a results summary in stdout
     print_results_summary(pockets_properties_info_dict, pockets_residues_info_dict)
@@ -1167,7 +1164,7 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     chimera_script_residues_surface = os.path.join(output_dir, "surface_residues_pockets_visualization.cmd")
     chimera_script_atoms_surface = os.path.join(output_dir, "surface_atoms_pockets_visualization.cmd")
     
-    generate_chimera_script_pockets(file_path, pocket_files, chimera_script_pockets)
+    generate_chimera_script_pockets(file_path, pocket_files, color_list, chimera_script_pockets)
 
     generate_chimera_script_residues_bs(file_path, pockets_residues_info_dict, color_list, chimera_script_residues_bs)
     generate_chimera_script_atoms_bs(file_path, pockets_residues_info_dict, color_list, chimera_script_atoms_bs)
