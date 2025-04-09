@@ -6,6 +6,8 @@ from collections import defaultdict, deque
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime
+import shutil
+
 
 # OVERVIEW
 # STEP 0: Read PDB file and get atoms and residues information.
@@ -33,6 +35,14 @@ van_der_Waals_radii = {
     "N": 1.50,
     "S": 1.85
 }
+
+color_list = [
+        "red", "green", "blue", "yellow", "magenta", 
+        "cyan", "orange", "hot pink", "lime green", "deep sky blue",
+        "gold", "purple", "salmon", "forest green", "dodger blue",
+        "olive", "sienna", "violet", "teal", "tomato",
+        "navy blue", "chocolate", "spring green", "crimson", "medium purple"
+    ]
 
 # STEP 0
 def PDB_iterator(pdb_file_path=None):
@@ -363,7 +373,7 @@ def cluster_into_pockets(voxel_grid, grid_dimensions, MIN_PSP):
     return sorted(pockets, key=len, reverse=True)
 
 # STEP 5.2
-def filter_pockets_by_size(pockets, min_voxel_count=30):
+def filter_pockets_by_size(pockets, min_voxel_count=40):
     """
     Filter out pockets that have a voxel count lower than the minimum,
     due to them being too small
@@ -734,10 +744,9 @@ def generate_pocket_residues_pdb(pocket_number, surrounding_residues, atom_coord
         # Add TER lines between
         """for ter_point in ter_points[:-1]:  # All except the last one
             f.write(f"TER   {ter_point:5d}\n")"""
-        
         f.write(f"END\n")
 
-def generate_comprehensive_chimera_script(protein_pdb, pocket_files, residue_files, output_script):
+def generate_chimera_script_pockets(protein_pdb, pocket_files, output_script):
     """
     Generate a Chimera script to visualize the original protein structure along with all pocket residues.
     """
@@ -750,51 +759,176 @@ def generate_comprehensive_chimera_script(protein_pdb, pocket_files, residue_fil
         # Open the original protein PDB file
         f.write(f"open {protein_pdb}\n")
         
-        # Set up the visualization style for the protein
+        # Set up the visualization style for the protein - now with surface
         f.write("\n# Set up the visualization style for the protein\n")
-        f.write("represent ribbon #0\n")  # Show protein as ribbon
-        f.write("color skyblue #0\n")     # Color protein skyblue
+        f.write("color skyblue #0\n")  # Color protein skyblue
+        f.write("surface #0\n")  # Add surface to the protein
+        
+        # Create an expanded color list for up to 25 pockets
+        color_list = [
+            "red", "green", "blue", "yellow", "magenta", 
+            "cyan", "orange", "hot pink", "lime green", "deep sky blue",
+            "gold", "purple", "salmon", "forest green", "dodger blue",
+            "olive", "sienna", "violet", "teal", "tomato",
+            "navy blue", "chocolate", "spring green", "crimson", "medium purple"
+        ]
         
         # Load and visualize each pocket
         f.write("\n# Load and visualize pocket surfaces\n")
-        
         for i, pocket_file in enumerate(pocket_files):
             model_id = i + 1
+            pocket_color = color_list[i % len(color_list)]
             f.write(f"open {pocket_file}\n")
-            f.write(f"color cornflower blue #{model_id}\n")
-            f.write(f"transparency 80,s #{model_id}\n")
-        
-        # Load and visualize pocket residues
-        f.write("\n# Load and visualize pocket residues\n")
-        color_list = ["red", "orange", "yellow", "green", "cyan", "magenta", "hot pink", "gold", "olive", "forest green"]
-        
-        for i, residue_file in enumerate(residue_files):
-            model_id = i + len(pocket_files) + 1
-            color = color_list[i % len(color_list)]
-            f.write(f"open {residue_file}\n")
-            f.write(f"represent stick #{model_id}\n")
-            f.write(f"color {color} #{model_id}\n")
+            f.write(f"~bond #{model_id}\n")
+            f.write(f"represent sphere #{model_id} \n")
+            f.write(f"color {pocket_color} #{model_id}\n")
+            f.write(f"transparency 70,s #{model_id}\n")
+            f.write(f"setattr r 1.0 #{model_id}\n")
         
         # Create labels for pockets
         f.write("\n# Create labels for pockets\n")
         for i, pocket_file in enumerate(pocket_files):
             pocket_num = i + 1
-            model_id = i + 1
-            f.write(f"2dlabels create pocket{pocket_num} text \"Pocket {pocket_num}\" xpos 0.1 ypos {0.9 - 0.05*i} color {color_list[i % len(color_list)]}\n")
+            pocket_color = color_list[i % len(color_list)]
+            f.write(f"2dlabels create pocket{pocket_num} text \"Pocket {pocket_num}\" xpos 0.1 ypos {0.9 - 0.05*i} color {pocket_color}\n")
         
         # Set up view parameters
         f.write("\n# Set up view parameters\n")
         f.write("set bg_color white\n")
-        f.write("set silhouette\n")        # Add silhouette edges
-        f.write("set subdivision 1\n")      # Smooth molecular surface
+        f.write("set silhouette\n")  # Add silhouette edges
+        f.write("set subdivision 1\n")  # Smooth molecular surface
         
         # Center and zoom on the protein
         f.write("\n# Center on the protein\n")
         f.write("focus\n")
         f.write("turn y 30\n")
-        f.write("turn x 20\n")
+        f.write("turn x 20\n") 
+
+def start_chimera_script(protein_pdb, f):
+    """
+    Generate a Chimera script to visualize the original protein structure along with all pocket residues.
+    """
+    # Write header and comments
+    f.write("# Chimera script for visualizing Protein Binding Pockets\n")
+    f.write(f"# Generated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    f.write("# To use: open Chimera and run 'open <this_file>'\n\n")
+    
+    # Open the original protein PDB file
+    f.write(f"open {protein_pdb}\n")
+    
+    # Set up the visualization style for the protein
+    f.write("\n# Set up ball & stick visualization style for the protein\n")
+    f.write("color skyblue #0\n")  # Color protein skyblue
+    f.write("~ribbon #0\n")  # Hide ribbon representation
+    f.write("~surface #0\n")  # Hide any surface representation
+    f.write("show #0\n")  # Show protein atoms
+    f.write("represent bs #0\n")  # Represent as ball & stick
+    f.write("~display solvent\n")
 
 
+    # Load and visualize pocket residues
+    f.write("\n# Load and visualize pocket residues\n")
+    
+         
+def end_chimera_script(residues_info, color_list, f):
+    # Create labels for pockets
+    f.write("\n# Create labels for pockets\n")
+    for i, _ in enumerate(residues_info):
+        pocket_num = i + 1
+        f.write(f"2dlabels create pocket{pocket_num} text \"Pocket {pocket_num}\" xpos 0.1 ypos {0.9 - 0.05*i} color {color_list[i % len(color_list)]}\n")
+    
+    # Set up view parameters
+    f.write("\n# Set up view parameters\n")
+    
+    # Add lighting effects
+    f.write("\n# Enhance lighting\n")
+    f.write("light mode two-point\n")
+    
+    # Center and zoom on the protein
+    f.write("\n# Center on the protein\n")
+    f.write("focus\n")
+    f.write("turn y 30\n")
+    f.write("turn x 20\n")
+        
+def chimera_script_residues_bs(residues_info, color_list, f):
+    """
+    Generate a Chimera script to visualize the original protein structure along with all pocket residues.
+    """
+    # Load and visualize pocket residues
+    residues = []
+    for i in range(1, len(residues_info)+1):
+        residues_info_key = f'surface_pocket_{i}'
+        color = color_list[i % len(color_list)-1]
+        initial_string = f"color {color} "
+        final_string = ""
+
+        for (chain_id, res_id) in residues_info[residues_info_key].keys():
+            residues.append(f":{res_id}.{chain_id}")
+        residues_string = " ".join(residues)
+        final_string = initial_string + residues_string + "\n"
+        f.write(final_string)
+
+        initial_string = ""
+        final_string = ""
+        residues_string = ""
+        residues = []   
+
+ 
+def chimera_script_atoms_bs(residues_info, color_list, f):
+    # Load and visualize pocket residues
+    residues = []
+    for i in range(1, len(residues_info)+1):
+        residues_info_key = f'surface_pocket_{i}'
+        color = color_list[i % len(color_list)-1]
+        initial_string = f"color {color} "
+        final_string = ""
+
+        for (chain_id, res_id), residue_info in residues_info[residues_info_key].items():
+
+            for atom_tuple in residue_info['atoms']:
+                atom_name = atom_tuple[2]
+                residues.append(f":{res_id}.{chain_id}@{atom_name}")
+
+        residues_string = " ".join(residues)
+        final_string = initial_string + residues_string + "\n"
+        f.write(final_string)
+
+        initial_string = ""
+        final_string = ""
+        residues_string = ""
+        residues = []   
+
+
+
+
+def generate_chimera_script_atoms_bs(protein_pdb, residues_info, color_list, output_script):
+    with open(output_script, 'w') as f:
+        start_chimera_script(protein_pdb, f)
+        chimera_script_atoms_bs(residues_info, color_list, f)
+        end_chimera_script(residues_info, color_list, f)
+
+def generate_chimera_script_residues_bs(protein_pdb, residues_info, color_list, output_script):
+    with open(output_script, 'w') as f:
+        start_chimera_script(protein_pdb, f)
+        chimera_script_residues_bs(residues_info, color_list, f)
+        end_chimera_script(residues_info, color_list, f)
+
+def generate_chimera_script_atoms_surface(protein_pdb, residues_info, color_list, output_script):
+    with open(output_script, 'w') as f:
+        start_chimera_script(protein_pdb, f)
+        chimera_script_atoms_bs(residues_info, color_list, f)
+        f.write("surface")
+        f.write("~repr bs")
+        end_chimera_script(residues_info, color_list, f)
+
+def generate_chimera_script_residues_surface(protein_pdb, residues_info, color_list, output_script):
+    with open(output_script, 'w') as f:
+        start_chimera_script(protein_pdb, f)
+        chimera_script_residues_bs(residues_info, color_list, f)
+        f.write("surface")
+        f.write("~repr bs")
+        end_chimera_script(residues_info, color_list, f)
+        
 # Generate PyMOL script
 def generate_pymol_script(protein_file, pocket_files, residue_files, output_file):
     """
@@ -905,8 +1039,9 @@ def visualize_pockets(pdb_file_path, pocket_surface, atom_id_coords_dict, voxel_
                c='gray', s=1, alpha=0.3, label='Protein')
     
     # Define colors for different pockets
-    colors = ['red', 'blue', 'green', 'purple', 'orange', 'cyan', 'magenta', 'yellow']
-    
+    colors = [
+            "red", "green", "blue", "yellow", "magenta", 
+            "cyan", "orange", "pink"]
     # Plot top pockets (up to 8)
     for i, pocket in enumerate(pockets[:min(len(pockets), len(colors))]):
         # Calculate pocket center
@@ -986,6 +1121,13 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
+    # Copy the original PDB file to the output directory
+    pdb_filename = os.path.basename(file_path)
+    output_pdb_path = os.path.join(output_dir, pdb_filename)
+    shutil.copy2(file_path, output_pdb_path)
+    print(f"Copied original PDB file to: {output_pdb_path}")
+
+
     print(f"Processing PDB file: {file_path}")
     print(f"Step 1: Getting atom coordinates and residue information...")
     atoms_ids_and_coordinates, residues_info_dict = atoms_coordinates_dict(file_path)
@@ -1053,18 +1195,28 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
         # Generate pocket PDB file
         pocket_file = os.path.join(output_dir, f"pocket_{pocket_num}.pdb")
         generate_pocket_pdb(pocket_num, voxels, properties, box, voxel_size, pocket_file)
-        pocket_files.append(pocket_file)
+        pocket_files.append(f"pocket_{pocket_num}.pdb")
         
         # Generate residues PDB file
         residues = pockets_residues_info_dict.get(pocket_surface_id, {})
         residue_file = os.path.join(output_dir, f"pocket_{pocket_num}_residues.pdb")
         generate_pocket_residues_pdb(pocket_num, residues, atoms_ids_and_coordinates, residue_file)
-        residue_files.append(residue_file) 
+        residue_files.append(f"pocket_{pocket_num}_residues.pdb") 
 
     # Generate comprehensive Chimera script
-    chimera_script = os.path.join(output_dir, "visualize_all_pockets.cmd")
-    generate_comprehensive_chimera_script(file_path, pocket_files, residue_files, chimera_script)
+    chimera_script_pockets = os.path.join(output_dir, "pockets_visualization.cmd")
+    chimera_script_residues_bs = os.path.join(output_dir, "bs_residues_pockets_visualization.cmd")
+    chimera_script_atoms_bs = os.path.join(output_dir, "bs_atoms_pockets_visualization.cmd")
+    chimera_script_residues_surface = os.path.join(output_dir, "surface_residues_pockets_visualization.cmd")
+    chimera_script_atoms_surface = os.path.join(output_dir, "surface_atoms_pockets_visualization.cmd")
     
+    generate_chimera_script_pockets(file_path, pocket_files, chimera_script_pockets)
+
+    generate_chimera_script_residues_bs(file_path, pockets_residues_info_dict, color_list, chimera_script_residues_bs)
+    generate_chimera_script_atoms_bs(file_path, pockets_residues_info_dict, color_list, chimera_script_atoms_bs)
+    generate_chimera_script_residues_surface(file_path, pockets_residues_info_dict, color_list, chimera_script_residues_surface)
+    generate_chimera_script_atoms_surface(file_path, pockets_residues_info_dict, color_list, chimera_script_atoms_surface)
+
     # Generate PyMOL script
     pymol_script = os.path.join(output_dir, "visualize_pockets.pml")
     generate_pymol_script(file_path, pocket_files, residue_files, pymol_script)
