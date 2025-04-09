@@ -685,13 +685,12 @@ def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals
     
          
 
-# MODIFY IT
 def generate_pocket_data_table(pocket_surroundings, output_file):
     """
     Generate a text file containing tabular data of the residues surrounding a pocket.
     """
     with open(output_file, 'w') as f:
-        f.write(f"Surrounding Residues Of The Pockets\n")
+        f.write(f"SURROUNDING RESIDUES OF THE POCKETS\n")
         f.write(f"Generated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
         for pocket_surface_id, pocket_residues in pocket_surroundings.items():
@@ -702,7 +701,7 @@ def generate_pocket_data_table(pocket_surroundings, output_file):
             
             # Add detailed atom information section
             f.write("Detailed Atom Information:\n")
-            f.write(f"{'Chain':^6}{'Residue':^10}{'ResID':^8}{'AtomID':^8}{'Atom Name':^10}{'X':^10}{'Y':^10}{'Z':^10}\n")
+            f.write(f"{'Chain':>6}{'Residue':>10}{'ResID':>8}{'AtomID':>8}{'Atom Name':>12}{'X':>10}{'Y':>10}{'Z':>10}\n")
             f.write("-" * 72 + "\n")
             
             for (chain_id, res_id), surrounding_residues in pocket_residues.items():
@@ -711,8 +710,8 @@ def generate_pocket_data_table(pocket_surroundings, output_file):
                     x, y, z = atom_tuple[1]
                     atom_name = atom_tuple[2]
                     
-                    f.write(f"{chain_id:^6}{surrounding_residues['name']:^10}{res_id:^8}{atom_id:^8}"
-                            f"{str(atom_name):^10}{x:^10.3f}{y:^10.3f}{z:^10.3f}\n")
+                    f.write(f"{chain_id:>6}{surrounding_residues['name']:>10}{res_id:>8}{atom_id:>8}"
+                            f"{str(atom_name):>12}{x:>10.3f}{y:>10.3f}{z:>10.3f}\n")
                     
 
 def start_chimera_script(protein_pdb, f):
@@ -957,6 +956,12 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     generate_chimera_script_atoms_bs(file_path, pockets_residues_info_dict, color_list, chimera_script_atoms_bs)
     generate_chimera_script_residues_surface(file_path, pockets_residues_info_dict, color_list, chimera_script_residues_surface)
     generate_chimera_script_atoms_surface(file_path, pockets_residues_info_dict, color_list, chimera_script_atoms_surface)
+
+    print("\nFour different chimera visualizations have been created:")
+    print("   Balls and sticks pocket residues visualization")
+    print("   Balls and sticks pocket atoms visualization")
+    print("   Surface pocket residues visualization")
+    print("   Surface pocket atoms visualization")
 
     print(f"\nResults saved to {output_dir}")
 
