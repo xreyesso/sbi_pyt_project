@@ -546,6 +546,7 @@ def calculate_pocket_properties(pocket_voxels, pocket_surface, bounding_box, vox
         'center': center,
     }
 
+
 def calculate_all_pockets_info(pockets, pockets_surface, box, voxel_size):
     """
     Calculate pockets properties for all pockets
@@ -558,27 +559,48 @@ def calculate_all_pockets_info(pockets, pockets_surface, box, voxel_size):
             pockets[pocket_key], pockets_surface[surface_key], box, voxel_size)
     return pockets_information
 
-
 # STEP 9
+def filter_pockets_by_number_of_residues(pockets_dict, pocket_surroundings, pocket_properties, min_residue_count=2):    
+    filtered_pockets_dict = {}
+    filtered_pocket_surroundings = {}
+    filtered_pocket_properties = {}
 
-def print_results_summary(properties, residues_info):
+    i=0
+    # Iterate through each pocket
+    for pocket_id, surrounding_residues in pocket_surroundings.items():
+        # Extract the pocket ID without surface
+        original_pocket_id = pocket_id.replace('surface_', '')
+        
+        # Check if the pocket has enough surrounding residues
+        if len(surrounding_residues) >= min_residue_count:
+            # Keep this pocket and its data
+            filtered_pockets_dict[f"pocket_{i}"] = pockets_dict[original_pocket_id]
+            filtered_pocket_surroundings[f"surface_pocket_{i}"] = surrounding_residues
+            filtered_pocket_properties[f"pocket_{i}"] = pocket_properties[original_pocket_id]
+            i =+ 1
+
+    return filtered_pockets_dict, filtered_pocket_surroundings, filtered_pocket_properties
+
+
+# STEP 10
+def print_results_summary(properties, pocket_surroundings):
     """
     Generates a report summary which is printed in the terminal
     """
     print("=== Results Summary ===\n")
     
-    for i in range(1, len(residues_info)+1):
+    for i in range(1, len(pocket_surroundings)+1):
         properties_key = f'pocket_{i}'
-        residues_info_key = f'surface_pocket_{i}' 
+        pocket_surroundings_key = f'surface_pocket_{i}' 
         print(f"Pocket {i}")
         print(f"  Center: {properties[properties_key]['center']} Å")
         print(f"  Surface area: {properties[properties_key]['surface_area']} Å²")
         print(f"  Volume: {properties[properties_key]['volume']} Å³")
         print(f"  Depth:  {properties[properties_key]['depth']} Å")
-        print(f"  Nearby residues: {len(residues_info[residues_info_key])}")
+        print(f"  Nearby residues: {len(pocket_surroundings[pocket_surroundings_key])}")
         residues = []
-        for (_, res_id), res_data in residues_info[residues_info_key].items():
-            resname = res_data['name']
+        for (_, res_id), surrounding_residues in pocket_surroundings[pocket_surroundings_key].items():
+            resname = surrounding_residues['name']
             residues.append(resname + str(res_id))
         residues_string = ", ".join(residues)
         print(f"  Residues: {residues_string}")
@@ -611,7 +633,7 @@ def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals
         # Detailed information for each pocket
         for i in range(1, len(pocket_surroundings)+1):
             pocket_key = f'pocket_{i}'
-            surface_key = f'surface_pocket_{i}'
+            pocket_surroundings_key = f'surface_pocket_{i}'
             f.write(f"==== POCKET {i} ====\n\n")
             f.write(f"Number of voxels in the pocket: {len(pockets_dict[pocket_key])}\n\n")
             
@@ -624,13 +646,13 @@ def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals
             f.write(f"  Depth: {pocket_properties[pocket_key]['depth']:.2f} Å\n\n")
             
             # Surface of the pocket
-            if surface_key in pocket_surroundings:
+            if pocket_surroundings_key in pocket_surroundings:
                 
                 # List of residues
-                f.write(f"Residues in the surface of the pocket ({len(pocket_surroundings[surface_key])}):\n")
+                f.write(f"Residues in the surface of the pocket ({len(pocket_surroundings[pocket_surroundings_key])}):\n")
                 residues_list = []
-                for (chain_id, residue_id), residue_data in pocket_surroundings[surface_key].items():
-                    residue_name = residue_data['name']
+                for (chain_id, residue_id), surrounding_residues in pocket_surroundings[pocket_surroundings_key].items():
+                    residue_name = surrounding_residues['name']
                     residues_list.append(f"{chain_id}-{residue_name}{residue_id}")
                 
                 if residues_list:
@@ -642,9 +664,9 @@ def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals
                 f.write(f"Atoms in the surface of the pocket:\n")
                 atoms_text = []
 
-                for (chain_id, residue_id), residue_data in pocket_surroundings[surface_key].items():
-                    atoms_text.append(f"    {residue_data['name']}{residue_id}:\n")
-                    for atom_id, coords, atom_name in list(residue_data['atoms']):
+                for (chain_id, residue_id), surrounding_residues in pocket_surroundings[pocket_surroundings_key].items():
+                    atoms_text.append(f"    {surrounding_residues['name']}{residue_id}:\n")
+                    for atom_id, coords, atom_name in list(surrounding_residues['atoms']):
                         atoms_text.append(f"        Atom {atom_id:>5}: {atom_name:>3} ({coords[0]:.4f},{coords[1]:.4f},{coords[2]:.4f})\n")
                     atoms_text.append("\n")
 
@@ -658,11 +680,11 @@ def generate_pockets_report(output_file, voxel_size, probe_radius, van_der_Waals
             else:
                 f.write("No surrounding residues or atoms information available.\n\n")
     
-      
+"""      
 def generate_pocket_pdb(pocket_number, voxels, properties, bounding_box, voxel_size, output_file):
-    """
+    
     Generate a PDB file for a single pocket with extra information.
-    """
+    
 
     xmin = bounding_box["X"][0]
     ymin = bounding_box["Y"][0]
@@ -699,9 +721,10 @@ def generate_pocket_pdb(pocket_number, voxels, properties, bounding_box, voxel_s
         
         # End file
         f.write("END\n")
-            
+"""            
 
-def generate_pocket_residues_pdb(pocket_number, surrounding_residues, atom_coords_dict, output_file):
+# MODIFY IT
+def generate_pocket_residues_pdb(pocket_number, pocket_surroundings, output_file):
     """
     Generate a PDB file containing the residues surrounding a pocket.
     """
@@ -713,19 +736,19 @@ def generate_pocket_residues_pdb(pocket_number, surrounding_residues, atom_coord
         f.write("REMARK  Format: CHAIN RESNAME RESNUM ATOMS\n")
         
         # Write list of residues in REMARK lines
-        for (chain_id, res_id), res_info in surrounding_residues.items():
-            atom_count = len(res_info['atoms'])
-            f.write(f"REMARK  {chain_id} {res_info['name']:3s} {res_id:4d} ({atom_count} atoms)\n")
+        for (chain_id, res_id), surrounding_residues in pocket_surroundings.items():
+            atom_count = len(surrounding_residues['atoms'])
+            f.write(f"REMARK  {chain_id} {surrounding_residues['name']:3s} {res_id:4d} ({atom_count} atoms)\n")
         
         #ter_points = []
         
         # Group by chain and residue
-        for (chain_id, res_id), res_info in surrounding_residues.items():
+        for (chain_id, res_id), surrounding_residues in pocket_surroundings.items():
             # Track where TER records should go
             #ter_points.append(atom_idx + len(res_info['atoms']))
             
             # Write all atoms 
-            for atom_tuple in res_info['atoms']:
+            for atom_tuple in surrounding_residues['atoms']:
                 atom_id = atom_tuple[0]
                 x, y, z = atom_tuple[1]
                 atom_name = atom_tuple[2]
@@ -737,7 +760,7 @@ def generate_pocket_residues_pdb(pocket_number, surrounding_residues, atom_coord
                 elif 'elements' in res_info and idx < len(res_info['elements']):
                     atom_name = res_info['elements'][idx]
                 """
-                f.write(f"ATOM  {atom_id:5d} {str(atom_name):4s} {res_info['name']:3s} {chain_id}{res_id:4d}    "
+                f.write(f"ATOM  {atom_id:5d} {str(atom_name):4s} {surrounding_residues['name']:3s} {chain_id}{res_id:4d}    "
                         f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 {res_id/100:5.2f}      "
                         f"{chain_id}  \n")
         
@@ -830,10 +853,10 @@ def start_chimera_script(protein_pdb, f):
     f.write("\n# Load and visualize pocket residues\n")
     
          
-def end_chimera_script(residues_info, color_list, f):
+def end_chimera_script(pocket_surroundings, color_list, f):
     # Create labels for pockets
     f.write("\n# Create labels for pockets\n")
-    for i, _ in enumerate(residues_info):
+    for i, _ in enumerate(pocket_surroundings):
         pocket_num = i + 1
         f.write(f"2dlabels create pocket{pocket_num} text \"Pocket {pocket_num}\" xpos 0.1 ypos {0.9 - 0.05*i} color {color_list[i % len(color_list)]}\n")
     
@@ -850,19 +873,19 @@ def end_chimera_script(residues_info, color_list, f):
     f.write("turn y 30\n")
     f.write("turn x 20\n")
         
-def chimera_script_residues_bs(residues_info, color_list, f):
+def chimera_script_residues_bs(pocket_surroundings, color_list, f):
     """
     Generate a Chimera script to visualize the original protein structure along with all pocket residues.
     """
     # Load and visualize pocket residues
     residues = []
-    for i in range(1, len(residues_info)+1):
-        residues_info_key = f'surface_pocket_{i}'
+    for i in range(1, len(pocket_surroundings)+1):
+        pocket_surroundings_key = f'surface_pocket_{i}'
         color = color_list[i % len(color_list)-1]
         initial_string = f"color {color} "
         final_string = ""
 
-        for (chain_id, res_id) in residues_info[residues_info_key].keys():
+        for (chain_id, res_id) in pocket_surroundings[pocket_surroundings_key].keys():
             residues.append(f":{res_id}.{chain_id}")
         residues_string = " ".join(residues)
         final_string = initial_string + residues_string + "\n"
@@ -874,18 +897,18 @@ def chimera_script_residues_bs(residues_info, color_list, f):
         residues = []   
 
  
-def chimera_script_atoms_bs(residues_info, color_list, f):
+def chimera_script_atoms_bs(pocket_surroundings, color_list, f):
     # Load and visualize pocket residues
     residues = []
-    for i in range(1, len(residues_info)+1):
+    for i in range(1, len(pocket_surroundings)+1):
         residues_info_key = f'surface_pocket_{i}'
         color = color_list[i % len(color_list)-1]
         initial_string = f"color {color} "
         final_string = ""
 
-        for (chain_id, res_id), residue_info in residues_info[residues_info_key].items():
+        for (chain_id, res_id), surrounding_residues in pocket_surroundings[residues_info_key].items():
 
-            for atom_tuple in residue_info['atoms']:
+            for atom_tuple in surrounding_residues['atoms']:
                 atom_name = atom_tuple[2]
                 residues.append(f":{res_id}.{chain_id}@{atom_name}")
 
@@ -901,122 +924,33 @@ def chimera_script_atoms_bs(residues_info, color_list, f):
 
 
 
-def generate_chimera_script_atoms_bs(protein_pdb, residues_info, color_list, output_script):
+def generate_chimera_script_atoms_bs(protein_pdb, pocket_surroundings, color_list, output_script):
     with open(output_script, 'w') as f:
         start_chimera_script(protein_pdb, f)
-        chimera_script_atoms_bs(residues_info, color_list, f)
-        end_chimera_script(residues_info, color_list, f)
+        chimera_script_atoms_bs(pocket_surroundings, color_list, f)
+        end_chimera_script(pocket_surroundings, color_list, f)
 
-def generate_chimera_script_residues_bs(protein_pdb, residues_info, color_list, output_script):
+def generate_chimera_script_residues_bs(protein_pdb, pocket_surroundings, color_list, output_script):
     with open(output_script, 'w') as f:
         start_chimera_script(protein_pdb, f)
-        chimera_script_residues_bs(residues_info, color_list, f)
-        end_chimera_script(residues_info, color_list, f)
+        chimera_script_residues_bs(pocket_surroundings, color_list, f)
+        end_chimera_script(pocket_surroundings, color_list, f)
 
-def generate_chimera_script_atoms_surface(protein_pdb, residues_info, color_list, output_script):
+def generate_chimera_script_atoms_surface(protein_pdb, pocket_surroundings, color_list, output_script):
     with open(output_script, 'w') as f:
         start_chimera_script(protein_pdb, f)
-        chimera_script_atoms_bs(residues_info, color_list, f)
+        chimera_script_atoms_bs(pocket_surroundings, color_list, f)
         f.write("surface")
         f.write("~repr bs")
-        end_chimera_script(residues_info, color_list, f)
+        end_chimera_script(pocket_surroundings, color_list, f)
 
-def generate_chimera_script_residues_surface(protein_pdb, residues_info, color_list, output_script):
+def generate_chimera_script_residues_surface(protein_pdb, pocket_surroundings, color_list, output_script):
     with open(output_script, 'w') as f:
         start_chimera_script(protein_pdb, f)
-        chimera_script_residues_bs(residues_info, color_list, f)
+        chimera_script_residues_bs(pocket_surroundings, color_list, f)
         f.write("surface")
         f.write("~repr bs")
-        end_chimera_script(residues_info, color_list, f)
-        
-# Generate PyMOL script
-def generate_pymol_script(protein_file, pocket_files, residue_files, output_file):
-    """
-    Generate a script to show pockets in PyMOl.
-    """
-    # Pick colors for view
-    colors = ['marine', 'forest', 'firebrick', 'purple', 'chocolate', 
-              'limon', 'deepblue', 'wheat', 'hotpink', 'paleyellow']
-    
-    with open(output_file, 'w') as f:
-        f.write("# PyMOL script for pocket visualization\n")
-        f.write("# Generated by Pocket Detection Algorithm\n")
-        f.write(f"# Date: {datetime.datetime.now().strftime('%Y-%m-%d')}\n\n")
-        
-        # Load protein
-        f.write(f"load {protein_file}, protein_structure\n\n")
-        
-        # Setup protein look
-        f.write("# Set up protein display\n")
-        f.write("bg_color white\n")
-        f.write("hide everything\n")
-        f.write("show cartoon, protein_structure\n")
-        f.write("color slate, protein_structure\n")
-        f.write("set cartoon_transparency, 0.4\n\n")
-        
-        f.write("group Pockets\n\n")
-        
-        # Add pockets
-        f.write("# Load pockets\n")
-        for idx, pocket_file in enumerate(pocket_files):
-            pocket_name = f"pocket_{idx+1}"
-            color = colors[idx % len(colors)]
-            
-            f.write(f"load {pocket_file}, {pocket_name}\n")
-            f.write(f"set sphere_scale, 0.8, {pocket_name}\n")
-            f.write(f"show spheres, {pocket_name}\n")
-            f.write(f"color {color}, {pocket_name}\n")
-            
-            f.write(f"group Pockets, {pocket_name}\n\n")
-        
-        # Add residues
-        f.write("# Load pocket residues\n")
-        f.write("group Residues\n")
-        for idx, residue_file in enumerate(residue_files):
-            residue_name = f"residues_{idx+1}"
-            color = colors[idx % len(colors)]
-            
-            f.write(f"load {residue_file}, {residue_name}\n")
-            f.write(f"show sticks, {residue_name}\n")
-            f.write(f"color {color}, {residue_name}\n")
-            f.write(f"set stick_radius, 0.2, {residue_name}\n")
-            f.write(f"set stick_transparency, 0.3, {residue_name}\n")
-            
-            f.write(f"create surface_{idx+1}, {residue_name}\n")
-            f.write(f"show surface, surface_{idx+1}\n")
-            f.write(f"set surface_transparency, 0.8, surface_{idx+1}\n")
-            f.write(f"color {color}, surface_{idx+1}\n")
-            
-            f.write(f"group Residues, {residue_name} surface_{idx+1}\n\n")
-        
-        # Final view setup
-        f.write("# Set up scene\n")
-        f.write("set ray_shadows, 0\n")
-        f.write("set ray_trace_mode, 1\n")
-        f.write("set surface_quality, 1\n")
-        f.write("orient\n")
-        f.write("zoom pockets, 5\n\n")
-        
-        # Add custom labels
-        f.write("# Add pocket labels\n")
-        for idx in range(len(pocket_files)):
-            f.write(f"pseudoatom label_{idx+1}, pos=[0,0,0]\n")
-            f.write(f"label label_{idx+1}, \"Pocket {idx+1}\"\n")
-            f.write(f"set label_color, {colors[idx % len(colors)]}, label_{idx+1}\n")
-            f.write(f"cmd.translate([10*{idx}, 0, 0], \"label_{idx+1}\", camera=0)\n\n")
-        
-        # Add some helper commands
-        f.write("# Custom commands\n")
-        f.write("cmd.extend('show_pocket', lambda p=1: cmd.disable('all') or cmd.enable(f'pocket_{p}') or cmd.enable(f'residues_{p}') or cmd.enable(f'surface_{p}') or cmd.enable('protein_structure') or cmd.zoom(f'pocket_{p}'))\n")
-        f.write("cmd.extend('show_all', lambda: cmd.enable('all'))\n")
-        f.write("cmd.extend('hide_protein', lambda: cmd.disable('protein_structure'))\n\n")
-        
-        # Start view
-        f.write("# Set initial view\n")
-        f.write("show_all\n")
-        f.write("center protein_structure\n")
-        f.write("zoom\n")
-
+        end_chimera_script(pocket_surroundings, color_list, f)
 
 
 
@@ -1173,6 +1107,9 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     print(f"Step 8: Computing the properties (volume, surface area, depth, center) for all pockets...\n")
     pockets_properties_info_dict = calculate_all_pockets_info(pockets_dict, pockets_surface, box, voxel_size)
     
+    print(f"Step 9: Filtering pockets by number of residues")
+    pockets_dict, pockets_residues_info_dict, pockets_properties_info_dict =  filter_pockets_by_number_of_residues(pockets_dict, pockets_residues_info_dict, pockets_properties_info_dict)    
+    print("Found pockets")
     # Generate output files
     print(f"\nStep 9: Generating output files...")
     
@@ -1200,7 +1137,7 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
         # Generate residues PDB file
         residues = pockets_residues_info_dict.get(pocket_surface_id, {})
         residue_file = os.path.join(output_dir, f"pocket_{pocket_num}_residues.pdb")
-        generate_pocket_residues_pdb(pocket_num, residues, atoms_ids_and_coordinates, residue_file)
+        generate_pocket_residues_pdb(pocket_num, residues, residue_file)
         residue_files.append(f"pocket_{pocket_num}_residues.pdb") 
 
     # Generate comprehensive Chimera script
@@ -1217,12 +1154,7 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     generate_chimera_script_residues_surface(file_path, pockets_residues_info_dict, color_list, chimera_script_residues_surface)
     generate_chimera_script_atoms_surface(file_path, pockets_residues_info_dict, color_list, chimera_script_atoms_surface)
 
-    # Generate PyMOL script
-    pymol_script = os.path.join(output_dir, "visualize_pockets.pml")
-    generate_pymol_script(file_path, pocket_files, residue_files, pymol_script)
-    
     print(f"\nResults saved to {output_dir}")
-    print(f"To visualize the results in PyMOL, run: pymol {pymol_script}")
     
 
     # Visualize pockets
