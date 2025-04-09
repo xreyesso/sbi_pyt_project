@@ -560,25 +560,26 @@ def calculate_all_pockets_info(pockets, pockets_surface, box, voxel_size):
     return pockets_information
 
 # STEP 9
-def filter_pockets_by_number_of_residues(pockets_dict, pocket_surroundings, pocket_properties, min_residue_count=2):    
+def filter_pockets_by_number_of_residues(pockets_dict, pocket_surroundings, pocket_properties, min_residue_count=3):    
     filtered_pockets_dict = {}
     filtered_pocket_surroundings = {}
     filtered_pocket_properties = {}
 
-    i=0
+    i=1
     # Iterate through each pocket
     for pocket_id, surrounding_residues in pocket_surroundings.items():
         # Extract the pocket ID without surface
         original_pocket_id = pocket_id.replace('surface_', '')
-        
+
         # Check if the pocket has enough surrounding residues
         if len(surrounding_residues) >= min_residue_count:
             # Keep this pocket and its data
             filtered_pockets_dict[f"pocket_{i}"] = pockets_dict[original_pocket_id]
             filtered_pocket_surroundings[f"surface_pocket_{i}"] = surrounding_residues
             filtered_pocket_properties[f"pocket_{i}"] = pocket_properties[original_pocket_id]
-            i =+ 1
-
+            i += 1
+    print(pocket_properties)
+    print(filtered_pocket_properties)
     return filtered_pockets_dict, filtered_pocket_surroundings, filtered_pocket_properties
 
 
@@ -854,12 +855,30 @@ def start_chimera_script(protein_pdb, f):
     
          
 def end_chimera_script(pocket_surroundings, color_list, f):
-    # Create labels for pockets
-    f.write("\n# Create labels for pockets\n")
+    # Create labels for pockets with max 16 pockets per column
+    f.write("\n# Create labels for pockets with max 16 per column\n")
+    num_pockets = len(pocket_surroundings)
+    max_pockets_per_column = 16
+    
     for i, _ in enumerate(pocket_surroundings):
         pocket_num = i + 1
-        f.write(f"2dlabels create pocket{pocket_num} text \"Pocket {pocket_num}\" xpos 0.1 ypos {0.9 - 0.05*i} color {color_list[i % len(color_list)]}\n")
-    
+        color = color_list[i % len(color_list)]
+        
+        # Calculate column number (0-based) and position within column
+        column = i // max_pockets_per_column
+        position_in_column = i % max_pockets_per_column
+        
+        # Only create a new column if we exceed 16 pockets
+        if num_pockets <= max_pockets_per_column:
+            # Just one column if 16 or fewer pockets
+            xpos = 0.1
+            ypos = 0.9 - 0.05 * i
+        else:
+            # Multiple columns if more than 16 pockets
+            xpos = 0.1 + 0.4 * column
+            ypos = 0.9 - 0.05 * position_in_column
+            
+        f.write(f"2dlabels create pocket{pocket_num} text \"Pocket {pocket_num}\" xpos {xpos} ypos {ypos} color {color}\n")
     # Set up view parameters
     f.write("\n# Set up view parameters\n")
     
@@ -1110,8 +1129,9 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     print(f"Step 9: Filtering pockets by number of residues")
     pockets_dict, pockets_residues_info_dict, pockets_properties_info_dict =  filter_pockets_by_number_of_residues(pockets_dict, pockets_residues_info_dict, pockets_properties_info_dict)    
     print("Found pockets")
+    
     # Generate output files
-    print(f"\nStep 9: Generating output files...")
+    print(f"\nStep 10: Generating output files...")
     
     # Print a results summary in stdout
     print_results_summary(pockets_properties_info_dict, pockets_residues_info_dict)
@@ -1124,16 +1144,16 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     pocket_files = []
     residue_files = []
     
-    for pocket_surface_id, voxels in pockets_surface.items():
+    for pocket_surface_id, _ in pockets_residues_info_dict.items():
         pocket_num = int(pocket_surface_id.split('_')[2])
         pocket_id = f"pocket_{pocket_num}"
         properties = pockets_properties_info_dict[pocket_id]
         
-        # Generate pocket PDB file
+        """# Generate pocket PDB file
         pocket_file = os.path.join(output_dir, f"pocket_{pocket_num}.pdb")
         generate_pocket_pdb(pocket_num, voxels, properties, box, voxel_size, pocket_file)
         pocket_files.append(f"pocket_{pocket_num}.pdb")
-        
+        """
         # Generate residues PDB file
         residues = pockets_residues_info_dict.get(pocket_surface_id, {})
         residue_file = os.path.join(output_dir, f"pocket_{pocket_num}_residues.pdb")
