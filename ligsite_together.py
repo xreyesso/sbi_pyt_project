@@ -4,29 +4,27 @@ import math
 import os
 from collections import defaultdict, deque
 import numpy as np
-import matplotlib.pyplot as plt
 import datetime
 import shutil
 
-
 # OVERVIEW
-# STEP 0: Read PDB file and get atoms and residues information.
-# STEP 1: Create a bounding box for the protein and divide this space into a grid made of voxels.
-# STEP 2: Set a value for each voxel. Start by setting all voxels to 0. A voxel that is inaccessible 
-#         to solvent (because it is already occupied by the protein) gets a value of -1.
-# STEP 3: A sequence of voxels which starts with protein, followed by solvent and ending with protein is 
-#         called a protein-solvent-protein (PSP) event. First, scan along the x, y and z axis to detect PSP events.
-# STEP 4: Scan along 4 cubic diagonals to detect more PSP events.
+# STEP 1:   Read PDB file and get atoms and residues information.
+# STEP 2:   Create a bounding box for the protein and divide this space into a grid made of voxels.
+#           Set a value for each voxel. Start by setting all voxels to 0. A voxel that is inaccessible 
+#           to solvent (because it is already occupied by the protein) gets a value of -1.
+# STEP 3:   A sequence of voxels which starts with protein, followed by solvent and ending with protein is 
+#           called a protein-solvent-protein (PSP) event. First, scan along the x, y and z axis to detect PSP events.
+# STEP 4:   Scan along 4 cubic diagonals to detect more PSP events.
 # STEP 5.1: Detect pockets as regions of voxels with a minimum number of PSP events (MIN_PSP) 
 #           by checking nearest neighbors.
 # STEP 5.2: Take out pockets that don't have the minimum number of voxels.
-# STEP 6: Determine the voxels that are part of the surface of a pocket, 
-#         by checking which voxels have protein neighbors.
-# STEP 7: Identify the aminoacids and atoms that surround the surface of a pocket.
-# STEP 8: Calculate the volume, surface area, depth and center for each pocket
-# STEP 9: Prepare output and display. Print results summary on the terminal, generate a report file, individual pdb files per pocket
-#         and a pymol script to visualize the results
-
+# STEP 6:   Determine the voxels that are part of the surface of a pocket, 
+#           by checking which voxels have protein neighbors.
+# STEP 7:   Identify the aminoacids and atoms that surround the surface of a pocket.
+# STEP 8:   Calculate the volume, surface area, depth and center for each pocket.
+# STEP 9:   Filter pockets by number of residues.
+# STEP 10:  Prepare output and display. Print results summary on the terminal, generate a report file, a table summarizing 
+#           the residues surrounding each pocket and 4 Chimera scripts for four visualization modes.
 
 van_der_Waals_radii = {
     "C": 1.70,
