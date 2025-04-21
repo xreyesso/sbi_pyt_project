@@ -1,0 +1,49 @@
+Bound structure,Unbound structure,RMSD,Protein_name,Ligand_description,Hit,Pocket_with_best_match,Percentage_of_pocket_with_best_match,Length,Protein_Families
+2ctc,2ctb,0.15,Carboxypeptidase,LOF,1,1,75,419 AA,peptidase M14 family
+1phd,1phc,0.17,Camphor 5-monoxygenase,"HEM, PIW",1,1,65.52,415 AA,cytochrome P450 family
+1hew,1hel,0.21,Acetylchitotriose,NAG,0,1,45.45,147 AA,glycosyl hydrolase 22 family
+1inc,1esa,0.21,Elastase,ICL,0,None,0,266 AA,peptidase S1 family
+1blh,1djb,0.23,Methyl]phosphonate,FOS,0,None,0,281 AA,class-A beta-lactamase family
+1bid,3tms,0.24,Thymidylate synthase,"CBX, UMP",1,1,83.3,264 AA,thymidylate synthase family
+1qpe,3lck,0.25,Lck kinase,"PP2, PTR",0,1,38.46,509 AA,"protein kinase superfamily, Tyr protein kinase family"
+2sim,2sil,0.25,Sialidase (neuraminidase),DAN,1,2,53.85,382 AA,glycosyl hydrolase 33 family
+3ptb,3ptn,0.26,Beta trypsin,BEN,0,None,0,246 AA,peptidase S1 family
+1byb,1bya,0.26,Beta amylase,GLC,1,1,56.67,496 AA,glycosyl hydrolase 14 family
+1rob,8rat,0.28,Ribonuclease A,C2P,0,2,12.5,150 AA,pancreatic ribonuclease family
+1mrg,1ahc,0.3,Alpha momorcharin,AND,0,4,27.27,286 AA,ribosome-inactivating protein family
+1mtw,2tga,0.31,Trypsin,DX9,0,1,12.5,246 AA,peptidase S1 family
+1gca,1gcg,0.32,Galactose-binding protein,GAL,1,2,66.67,332 AA,bacterial solute-binding protein 2 family
+1stp,1swb,0.33,Streptavidin,BTN,1,1,93.75,183 AA,avidin/streptavidin family
+1pso,1psn,0.33,Pepsin 3a,"IVA, STA",1,1,76.47,388 AA,peptidase A1 family
+2h4n,2cba,0.33,Carbonic anhydrase II,AZM,0,2,40,260 AA,alpha-carbonic anhydrase family
+1acj,1qif,0.34,Acetylcholinesterase,THA,1,2,63.64,586 AA,type-B carboxylesterase/lipase family
+1okm,4ca2,0.34,carbonic anhydrase II,SAB,0,1,45.45,260 AA,alpha-carbonic anhydrase family
+1a6w,1a6u,0.35,B1-8 FV fragment,NIP,1,1,70,129 AA,
+1apu,3app,0.36,Penicillopepsin,"MAN, OET, IVA, STA",1,1,55,323 AA,peptidase A1 family
+2ifb,1ifb,0.37,Fatty acid binding protein,PLM,1,1,50,132 AA,calycin superfamily
+1hfc,1cge,0.37,Fibroblast collagenase,HAP,1,2,80,469 AA,peptidase M10A family
+1dwd,1hxf,0.44,Alpha thrombin + hirudin,MID,0,5,33.33,622 AA,peptidase S1 family
+5cna,2ctv,0.44,Concanavalin A,MMA,0,None,0,290 AA,leguminous lectin family
+1srf,1pts,0.45,Streptavidin,MTB,1,1,75,183 AA,avidin/streptavidin family
+1snc,1stn,0.52,Staphylococcal nuclease,PTP,0,1,36.36,231 AA,thermonuclease family
+1rbp,1brq,0.54,Retinol binding protein,RTL,0,1,31.25,201 AA,"calycin superfamily, Lipocalin family"
+1pdz,1pdy,0.54,Enolase,PGA,1,1,100,433 AA,enolase family
+2ypi,1ypi,0.57,Triose phosphate isomerase,PGA,1,1,84.62,248 AA,triosephosphate isomerase family
+1rne,1bbs,0.6,Renin,"NAG, C60",1,2,60.87,406 AA,peptidase A1 family
+1ulb,1ula,0.61,Purine nucleoside phosphorylase,GUN,1,1,72.22,289 AA,PNP/MTAP phosphorylase family
+1stp,2rta,0.62,Streptavidin,BTN,1,1,100,183 AA,avidin/streptavidin family
+2tmn,1l3f,0.62,Thermolysin,"PHO, NH2",1,1,61.54,548 AA,peptidase M4 family
+5p2p,3p2p,0.62,Phosphilipase,DHG,1,1,70.59,146 AA,phospholipase A2 family
+2pk4,1krn,0.63,Plasminogen kringle,ACA,0,None,0,810 AA,peptidase S1 family
+4dfr,5dfr,0.8,Dihydrofolate reductase,MTX,1,1,56.25,159 AA,dihydrofolate reductase family
+1hyt,1npc,0.87,Thermolysin,"DMS, BZS",0,None,0,566 AA,peptidase M4 family
+1fbp,2fbp,0.89,Phosphohydrolase,"AMP, F6P",0,4,37.93,338 AA,FBPase class 1 family
+3gch,1chg,0.91,Gamma chymotrypsin,CIN,1,2,50,245 AA,peptidase S1 family
+1ivd,1nna,1,Sialidase,"FUC, ST1, NAG, MAN",0,1,4.76,470 AA,glycosyl hydrolase 34 family
+3mth,6ins,1,Methylparaben insulin,MPB,0,2,16.67,108 AA,insulin family
+1cdo,8adh,1.17,Alcohol dehydrogenase,NAD,0,1,11.11,375 AA,zinc-containing alcohol dehydrogenase family
+4phv,3phv,1.28,HIV 1 protease,VAC,0,2,26.67,"1,435 AA",
+1ida,1hsi,1.41,HIV 2 protease,"QND, HPB, PY2, PPL",0,1,42.86,"1,464 AA",
+1imb,1ime,1.45,Inositol monophosphatase,LIP,1,1,80,277 AA,inositol monophosphatase superfamily
+6rsa,7rat,2.08,Ribonuclease,UVC,0,1,7.69,150 AA,pancreatic ribonuclease family
+7cpa,5cpa,0.4,Carboxypeptidase,FVF,0,2,52.94,419 AA,peptidase M14 family
