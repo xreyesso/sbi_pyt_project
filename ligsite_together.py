@@ -854,7 +854,9 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     
     # Copy the original PDB file to the output directory
     pdb_filename = os.path.basename(file_path)
-    output_pdb_path = os.path.join(output_dir, pdb_filename)
+    chimera_output_dir = output_dir + "/chimera"
+    os.makedirs(chimera_output_dir, exist_ok=True)
+    output_pdb_path = os.path.join(chimera_output_dir, pdb_filename)
     shutil.copy2(file_path, output_pdb_path)
     print(f"Copied original PDB file to: {output_pdb_path}")
 
@@ -924,8 +926,6 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
     generate_pocket_data_table(pockets_residues_info_dict, residue_file)
 
     # Generate names of chimera scripts files
-    chimera_output_dir = output_dir + "/chimera"
-    os.makedirs(chimera_output_dir, exist_ok=True)
     chimera_script_residues_bs = os.path.join(chimera_output_dir, "bs_residues_pockets_visualization.cmd")
     chimera_script_atoms_bs = os.path.join(chimera_output_dir, "bs_atoms_pockets_visualization.cmd")
     chimera_script_residues_surface = os.path.join(chimera_output_dir, "surface_residues_pockets_visualization.cmd")
