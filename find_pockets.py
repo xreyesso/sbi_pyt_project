@@ -943,10 +943,15 @@ def run_complete_workflow(file_path, output_dir="./output", voxel_size=0.5, MIN_
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         pdb_file = sys.argv[1]
-        protein = pdb_file.split('.')[0]
+        filename = os.path.basename(pdb_file)
+        protein = filename.split('.')[0]
         output_dir = f"./{protein}_output"
+        
+        if len(sys.argv) > 2:
+            folder = sys.argv[2]
+            output_dir = folder + "/" + protein + "_output"  
+            
         # Run the workflow
         run_complete_workflow(pdb_file, output_dir)
-
     else:
-        print("Usage: python find_pockets.py [pdb_file]")
+        print("Usage: python find_pockets.py <pdb_file> [output_directory]")
