@@ -2,8 +2,6 @@
 library(ggplot2)
 library(dplyr)
 
-setwd("/home/mariatc025/master/trim2/PYT/project/sbi_pyt_project")
-
 # Read the csv file
 data <- read.csv("evaluation_results.csv", header=TRUE, sep=",", na.strings="-")
 
